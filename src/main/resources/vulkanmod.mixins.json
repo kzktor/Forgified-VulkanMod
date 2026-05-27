@@ -2,7 +2,8 @@
   "required": true,
   "minVersion": "0.8",
   "package": "net.vulkanmod.mixin",
-  "compatibilityLevel": "JAVA_17",
+  "compatibilityLevel": "JAVA_21",
+  "refmap": "vulkanmod.refmap.json",
   "plugin": "net.vulkanmod.mixin.MixinPlugin",
   "mixins": [
   ],
@@ -24,6 +25,7 @@
     "compatibility.ProgramM",
     "compatibility.UniformM",
     "compatibility.gl.GL11M",
+    "compatibility.gl.GL14M",
     "compatibility.gl.GL15M",
     "compatibility.gl.GL30M",
 
@@ -45,6 +47,7 @@
     "render.LevelRendererMixin",
     "render.MinecraftMixin",
     "render.RenderSystemMixin",
+    "render.RenderSystemAccessor",
     "render.RenderTypeM",
     "render.ShaderInstanceM",
     "render.entity.EntityRendererM",
@@ -52,6 +55,8 @@
     "render.entity.model.ModelPartCubeM",
     "render.entity.model.ModelPartM",
     "render.particle.SingleQuadParticleM",
+    "render.particle.ParticleEngineMixin",
+    "render.particle.ParticleAccessor",
     "render.target.MainTargetMixin",
     "render.target.RenderTargetMixin",
     "render.vertex.BufferBuilderM",
@@ -90,7 +95,15 @@
 
     "render.block.BakedQuadM",
 
-    "voxel.VoxelShapeMixin"
+    "optimization.StateHolderMixin",
+    "optimization.HolderReferenceMixin",
+    "voxel.VoxelShapeMixin",
+    "compatibility.fml.ImmediateWindowHandlerMixin",
+    "compatibility.distanthorizons.MinecraftGLWrapperMixin",
+    "compatibility.distanthorizons.LightMapWrapperMixin",
+    "compatibility.distanthorizons.NeoforgeClientProxyMixin",
+    "compatibility.distanthorizons.GLProxyMixin",
+    "compatibility.distanthorizons.ClientApiMixin"
   ],
   "injectors": {
     "defaultRequire": 1
