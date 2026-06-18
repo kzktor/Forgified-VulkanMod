@@ -142,6 +142,8 @@ Recommended status categories:
 
 Each category should have evidence: tests, logs, or in-game verification.
 
+The canonical local ledger for these categories is `src/main/resources/assets/vulkanmod/compat/gl_contracts.properties`. Tests should fail if a new progress category is invented outside the ledger or if the ledger starts naming specific mods as fix targets.
+
 ## Success Criteria
 
 This goal is satisfied only when:
