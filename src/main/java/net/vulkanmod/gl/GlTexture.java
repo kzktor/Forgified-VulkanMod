@@ -1,13 +1,16 @@
 package net.vulkanmod.gl;
 
 import it.unimi.dsi.fastutil.ints.Int2ReferenceOpenHashMap;
+import net.vulkanmod.compat.gl.GlPixelStore;
 import net.vulkanmod.vulkan.memory.MemoryManager;
+import net.vulkanmod.vulkan.Renderer;
 import net.vulkanmod.vulkan.texture.ImageUtil;
 import net.vulkanmod.vulkan.texture.SamplerManager;
 import net.vulkanmod.vulkan.texture.VTextureSelector;
 import net.vulkanmod.vulkan.texture.VulkanImage;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL12;
 import org.lwjgl.opengl.GL30;
 import org.lwjgl.system.MemoryUtil;
 
@@ -24,8 +27,21 @@ public class GlTexture {
     private static int activeTexture = 0;
 
     public static void bindIdToImage(int id, VulkanImage vulkanImage) {
+        GlTexture texture = getOrCreate(id);
+        texture.setVulkanImageReference(vulkanImage);
+    }
+
+    // Real GL treats binding an ungenerated name as creating that texture
+    // object; mods managing their own id ranges rely on it.
+    private static GlTexture getOrCreate(int id) {
         GlTexture texture = map.get(id);
-        texture.vulkanImage = vulkanImage;
+        if (texture == null) {
+            texture = new GlTexture(id);
+            map.put(id, texture);
+            if (id >= ID_COUNTER)
+                ID_COUNTER = id + 1;
+        }
+        return texture;
     }
 
     public static int genTextureId() {
@@ -43,7 +59,7 @@ public class GlTexture {
             return;
 
         if (boundTexture == null)
-            throw new NullPointerException("bound texture is null");
+            boundTexture = getOrCreate(id);
 
         VulkanImage vulkanImage = boundTexture.vulkanImage;
         if (vulkanImage != null)
@@ -61,6 +77,13 @@ public class GlTexture {
         VulkanImage image = glTexture != null ? glTexture.vulkanImage : null;
         if (image != null)
             MemoryManager.getInstance().addToFreeable(image);
+
+        // Deleting the bound texture unbinds it (GL semantics); a stale
+        // reference here would upload into a freed Vulkan image.
+        if (glTexture != null && glTexture == boundTexture) {
+            boundTexture = null;
+            boundTextureId = 0;
+        }
     }
 
     public static GlTexture getTexture(int id) {
@@ -72,12 +95,31 @@ public class GlTexture {
 
     public static void activeTexture(int i) {
         activeTexture = i - GL30.GL_TEXTURE0;
-        VTextureSelector.setActiveTexture(activeTexture);
+        if (Renderer.getInstance() != null) {
+            VTextureSelector.setActiveTexture(activeTexture);
+        }
+    }
+
+    public static int getActiveTexture() {
+        return GL30.GL_TEXTURE0 + activeTexture;
+    }
+
+    public static int getBoundTextureId(int target) {
+        if (target != GL11.GL_TEXTURE_2D) {
+            return 0;
+        }
+
+        return boundTextureId;
     }
 
     public static void texImage2D(int target, int level, int internalFormat, int width, int height, int border, int format, int type, long pixels) {
         if (checkParams(level, width, height))
             return;
+
+        if (boundTexture == null) {
+            GlEmulationLog.warnOnce("texImage2D.unbound", "glTexImage2D without a bound texture; upload skipped");
+            return;
+        }
 
         boundTexture.allocateIfNeeded(width, height, internalFormat, type);
         VTextureSelector.bindTexture(activeTexture, boundTexture.vulkanImage);
@@ -88,6 +130,11 @@ public class GlTexture {
     public static void texImage2D(int target, int level, int internalFormat, int width, int height, int border, int format, int type, @Nullable ByteBuffer pixels) {
         if (checkParams(level, width, height))
             return;
+
+        if (boundTexture == null) {
+            GlEmulationLog.warnOnce("texImage2D.unbound", "glTexImage2D without a bound texture; upload skipped");
+            return;
+        }
 
         boundTexture.allocateIfNeeded(width, height, internalFormat, type);
         VTextureSelector.bindTexture(activeTexture, boundTexture.vulkanImage);
@@ -111,6 +158,11 @@ public class GlTexture {
         if (width == 0 || height == 0)
             return;
 
+        if (boundTexture == null || boundTexture.vulkanImage == null) {
+            GlEmulationLog.warnOnce("texSubImage2D.unbound", "glTexSubImage2D without an allocated bound texture; upload skipped");
+            return;
+        }
+
         ByteBuffer src;
 
         GlBuffer glBuffer = GlBuffer.getPixelUnpackBufferBound();
@@ -120,21 +172,19 @@ public class GlTexture {
             src = glBuffer.data;
         } else {
             if (pixels != 0L) {
-                src = getByteBuffer(width, height, pixels);
+                src = getByteBuffer(width, height, boundTexture.vulkanImage.formatSize, getUnpackLayout(width), pixels);
             } else {
                 src = null;
             }
         }
 
         if (src != null)
-            boundTexture.uploadSubImage(xOffset, yOffset, width, height, format, src);
+            boundTexture.uploadSubImage(xOffset, yOffset, width, height, format, src, getUnpackLayout(width));
     }
 
-    private static ByteBuffer getByteBuffer(int width, int height, long pixels) {
+    private static ByteBuffer getByteBuffer(int width, int height, int formatSize, TextureUploadLayout layout, long pixels) {
         ByteBuffer src;
-        // TODO: hardcoded format size
-        int formatSize = 4;
-        src = MemoryUtil.memByteBuffer(pixels, width * height * formatSize);
+        src = MemoryUtil.memByteBuffer(pixels, layout.requiredByteSize(width, height, formatSize));
         return src;
     }
 
@@ -142,27 +192,150 @@ public class GlTexture {
         if (width == 0 || height == 0)
             return;
 
+        if (boundTexture == null || boundTexture.vulkanImage == null) {
+            GlEmulationLog.warnOnce("texSubImage2D.unbound", "glTexSubImage2D without an allocated bound texture; upload skipped");
+            return;
+        }
+
         ByteBuffer src;
 
         GlBuffer glBuffer = GlBuffer.getPixelUnpackBufferBound();
-        if (glBuffer != null) {
-            if (pixels != null) {
-                throw new IllegalStateException("Trying to use pixel buffer when there is a Pixel Unpack Buffer bound.");
-            }
-
+        if (glBuffer != null && pixels == null) {
             glBuffer.data.position(0);
             src = glBuffer.data;
         } else {
+            if (glBuffer != null) {
+                GlEmulationLog.warnOnce("texSubImage2D.pboConflict",
+                        "glTexSubImage2D received a client buffer while a pixel unpack buffer is bound; using the client buffer");
+            }
             src = pixels;
         }
 
         if (src != null)
-            boundTexture.uploadSubImage(xOffset, yOffset, width, height, format, src);
+            boundTexture.uploadSubImage(xOffset, yOffset, width, height, format, src, getUnpackLayout(width));
+    }
+
+    public static void compressedTexImage2D(int target, int level, int internalFormat, int width, int height, int border) {
+        if (target != GL11.GL_TEXTURE_2D) {
+            GlEmulationLog.warnOnce("compressedTexImage2D.target." + target,
+                    "glCompressedTexImage2D target 0x{} is not emulated; upload ignored", Integer.toHexString(target));
+            return;
+        }
+
+        if (checkParams(level, width, height))
+            return;
+
+        if (boundTexture == null) {
+            GlEmulationLog.warnOnce("compressedTexImage2D.unbound", "glCompressedTexImage2D without a bound texture; upload skipped");
+            return;
+        }
+
+        boundTexture.setImageMetadata(target, width, height, 1, internalFormat);
+        GlEmulationLog.warnOnce("compressedTexImage2D.metadataOnly." + internalFormat,
+                "Compressed texture format 0x{} is not decoded yet; recording texture metadata only", Integer.toHexString(internalFormat));
+    }
+
+    /**
+     * Compressed upload with data: decode BC/S3TC to RGBA on the CPU and upload through the
+     * proven uncompressed path so the texture actually renders. Falls back to the metadata-only
+     * path above for unsupported formats, missing data, or any decode failure — so the result is
+     * never worse than the previous blank-texture behavior.
+     */
+    public static void compressedTexImage2D(int target, int level, int internalFormat, int width, int height, int border, ByteBuffer data) {
+        if (target == GL11.GL_TEXTURE_2D && level == 0 && data != null
+                && CompressedTextureDecoder.isSupported(internalFormat)) {
+            ByteBuffer rgba = null;
+            try {
+                rgba = CompressedTextureDecoder.decodeToRgba(internalFormat, width, height, data);
+                if (rgba != null) {
+                    texImage2D(target, level, GL11.GL_RGBA, width, height, border,
+                            GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, rgba);
+                    return;
+                }
+            } catch (Throwable t) {
+                GlEmulationLog.warnOnce("compressedTexImage2D.decodeFailed." + internalFormat,
+                        "Compressed texture decode failed for format 0x{}; recording metadata only",
+                        Integer.toHexString(internalFormat));
+            } finally {
+                if (rgba != null) {
+                    MemoryUtil.memFree(rgba);
+                }
+            }
+        }
+
+        compressedTexImage2D(target, level, internalFormat, width, height, border);
+    }
+
+    public static void texImage3D(int target, int level, int internalFormat, int width, int height, int depth,
+                                  int border, int format, int type, @Nullable ByteBuffer data) {
+        boolean recorded = recordDimensionalMetadata(target, level, internalFormat, width, height, depth, border, format, type);
+        if (recorded && data != null) {
+            GlEmulationLog.warnContractGap("texture_image", "glTexImage3D.data",
+                    "glTexImage3D data upload is not allocated yet; recorded dimensional metadata for target 0x{}",
+                    Integer.toHexString(target));
+        }
+    }
+
+    private static boolean recordDimensionalMetadata(int target, int level, int internalFormat, int width, int height,
+                                                  int depth, int border, int format, int type) {
+        if (!isMetadataTextureTarget(target)) {
+            GlEmulationLog.warnContractGap("texture_image", "glTexImage3D.target",
+                    "glTexImage3D target 0x{} is not emulated; upload ignored", Integer.toHexString(target));
+            return false;
+        }
+        texImage3D(target, level, internalFormat, width, height, depth, border, format, type);
+        return true;
+    }
+
+    public static void texImage3D(int target, int level, int internalFormat, int width, int height, int depth, int border, int format, int type) {
+        if (!isMetadataTextureTarget(target)) {
+            GlEmulationLog.warnOnce("texImage3D.target." + target,
+                    "glTexImage3D target 0x{} is not emulated; upload ignored", Integer.toHexString(target));
+            return;
+        }
+
+        if (checkParams(level, width, height) || depth == 0)
+            return;
+
+        if (boundTexture == null) {
+            GlEmulationLog.warnOnce("texImage3D.unbound", "glTexImage3D without a bound texture; upload skipped");
+            return;
+        }
+
+        boundTexture.setImageMetadata(target, width, height, depth, internalFormat);
+        GlEmulationLog.warnOnce("texImage3D.metadataOnly." + internalFormat,
+                "3D/array texture target 0x{} is not allocated yet; recording texture metadata only", Integer.toHexString(target));
+    }
+
+    public static void texImage1D(int target, int level, int internalFormat, int width, int border, int format, int type) {
+        if (target != GL11.GL_TEXTURE_1D) {
+            GlEmulationLog.warnOnce("texImage1D.target." + target,
+                    "glTexImage1D target 0x{} is not emulated; upload ignored", Integer.toHexString(target));
+            return;
+        }
+
+        if (checkParams(level, width, 1))
+            return;
+
+        if (boundTexture == null) {
+            GlEmulationLog.warnOnce("texImage1D.unbound", "glTexImage1D without a bound texture; upload skipped");
+            return;
+        }
+
+        boundTexture.setImageMetadata(target, width, 1, 1, internalFormat);
+        GlEmulationLog.warnOnce("texImage1D.metadataOnly." + internalFormat,
+                "1D texture target is not allocated yet; recording texture metadata only");
     }
 
     public static void texParameteri(int target, int pName, int param) {
-        if (target != GL11.GL_TEXTURE_2D)
-            throw new UnsupportedOperationException("target != GL_TEXTURE_2D not supported");
+        if (target != GL11.GL_TEXTURE_2D) {
+            GlEmulationLog.warnOnce("texParameteri.target." + target,
+                    "glTexParameteri target 0x{} is not emulated; parameter ignored", Integer.toHexString(target));
+            return;
+        }
+
+        if (boundTexture == null)
+            return;
 
         switch (pName) {
             case GL30.GL_TEXTURE_MAX_LEVEL -> boundTexture.setMaxLevel(param);
@@ -173,7 +346,8 @@ public class GlTexture {
             case GL11.GL_TEXTURE_MAG_FILTER -> boundTexture.setMagFilter(param);
             case GL11.GL_TEXTURE_MIN_FILTER -> boundTexture.setMinFilter(param);
 
-            case GL11.GL_TEXTURE_WRAP_S, GL11.GL_TEXTURE_WRAP_T -> boundTexture.setClamp(param);
+            case GL11.GL_TEXTURE_WRAP_S -> boundTexture.setWrapS(param);
+            case GL11.GL_TEXTURE_WRAP_T -> boundTexture.setWrapT(param);
 
             default -> {}
         }
@@ -181,12 +355,26 @@ public class GlTexture {
         //TODO
     }
 
-    public static int getTexLevelParameter(int target, int level, int pName) {
-        if (target != GL11.GL_TEXTURE_2D)
-            throw new UnsupportedOperationException("target != GL_TEXTURE_2D not supported");
+    public static int getTexParameteri(int target, int pName) {
+        if (target != GL11.GL_TEXTURE_2D || boundTexture == null)
+            return 0;
 
-        if (boundTexture == null)
+        return boundTexture.getTexParameter(pName);
+    }
+
+    public static float getTexParameterf(int target, int pName) {
+        return getTexParameteri(target, pName);
+    }
+
+    public static int getTexLevelParameter(int target, int level, int pName) {
+        if (target != GL11.GL_TEXTURE_2D && (boundTexture == null || !boundTexture.hasMetadataForTarget(target))) {
+            GlEmulationLog.warnOnce("getTexLevelParameter.target." + target,
+                    "glGetTexLevelParameter target 0x{} is not emulated; returning -1", Integer.toHexString(target));
             return -1;
+        }
+
+        if (boundTexture == null || boundTexture.vulkanImage == null)
+            return boundTexture != null ? boundTexture.getTexLevelParameterFromMetadata(pName) : -1;
 
         return switch (pName) {
             case GL11.GL_TEXTURE_INTERNAL_FORMAT -> GlUtil.getGlFormat(boundTexture.vulkanImage.format);
@@ -198,19 +386,36 @@ public class GlTexture {
     }
 
     public static void generateMipmap(int target) {
-        if (target != GL11.GL_TEXTURE_2D)
-            throw new UnsupportedOperationException("target != GL_TEXTURE_2D not supported");
+        if (target != GL11.GL_TEXTURE_2D) {
+            GlEmulationLog.warnOnce("generateMipmap.target." + target,
+                    "glGenerateMipmap target 0x{} is not emulated; call ignored", Integer.toHexString(target));
+            return;
+        }
 
-        // TODO: crashing
-//        boundTexture.generateMipmaps();
+        if (boundTexture == null || boundTexture.vulkanImage == null)
+            return;
+
+        boundTexture.generateMipmaps();
     }
 
     public static void getTexImage(int tex, int level, int format, int type, long pixels) {
+        if (boundTexture == null || boundTexture.vulkanImage == null) {
+            GlEmulationLog.warnOnce("getTexImage.unbound", "glGetTexImage without an allocated bound texture; readback skipped");
+            return;
+        }
+
         VulkanImage image = boundTexture.vulkanImage;
 
         GlBuffer buffer = GlBuffer.getPixelPackBufferBound();
         long ptr;
         if (buffer != null) {
+            // With a pack buffer bound, pixels is an offset into it; an
+            // unallocated pack buffer leaves nowhere to write.
+            if (buffer.data == null) {
+                GlEmulationLog.warnOnce("getTexImage.emptyPbo", "glGetTexImage into an unallocated pixel pack buffer; readback skipped");
+                return;
+            }
+
             buffer.data.position((int) pixels);
 
             ptr = MemoryUtil.memAddress(buffer.data);
@@ -223,32 +428,69 @@ public class GlTexture {
     }
 
     public static void setVulkanImage(int id, VulkanImage vulkanImage) {
-        GlTexture texture = map.get(id);
+        GlTexture texture = getOrCreate(id);
 
-        texture.vulkanImage = vulkanImage;
+        texture.setVulkanImageReference(vulkanImage);
     }
 
     public static GlTexture getBoundTexture() {
         return boundTexture;
     }
 
+    public static void transitionReadOnly() {
+        if (boundTexture != null) {
+            boundTexture.transitionReadOnlyImage();
+        }
+    }
+
+    public static void transitionReadOnly(int id) {
+        GlTexture texture = map.get(id);
+        if (texture != null) {
+            texture.transitionReadOnlyImage();
+        }
+    }
+
     final int id;
     VulkanImage vulkanImage;
     int internalFormat;
+    int target = GL11.GL_TEXTURE_2D;
+    int width;
+    int height;
+    int depth = 1;
+    boolean hasImageMetadata;
 
     boolean needsUpdate = false;
     int maxLevel = 0;
     int maxLod = 0;
-    int minFilter, magFilter = GL11.GL_LINEAR;
+    int minFilter = GL11.GL_LINEAR;
+    int magFilter = GL11.GL_LINEAR;
 
     boolean clamp = true;
+    int wrapS = GL30.GL_CLAMP_TO_EDGE;
+    int wrapT = GL30.GL_CLAMP_TO_EDGE;
 
     public GlTexture(int id) {
         this.id = id;
     }
 
+    private void transitionReadOnlyImage() {
+        if (this.vulkanImage == null) {
+            return;
+        }
+
+        Renderer renderer = Renderer.getInstance();
+        if (renderer != null && Renderer.isRecording()) {
+            try (org.lwjgl.system.MemoryStack stack = org.lwjgl.system.MemoryStack.stackPush()) {
+                this.vulkanImage.readOnlyLayout(stack, Renderer.getCommandBuffer());
+            }
+        } else {
+            this.vulkanImage.readOnlyLayout();
+        }
+    }
+
     void allocateIfNeeded(int width, int height, int internalFormat, int type) {
         this.internalFormat = internalFormat;
+        setImageMetadata(GL11.GL_TEXTURE_2D, width, height, 1, internalFormat);
         int vkFormat = GlUtil.vulkanFormat(internalFormat, type);
 
         needsUpdate |= vulkanImage == null ||
@@ -261,6 +503,65 @@ public class GlTexture {
 
             needsUpdate = false;
         }
+    }
+
+    void setImageMetadata(int target, int width, int height, int depth, int internalFormat) {
+        this.target = target;
+        this.width = width;
+        this.height = height;
+        this.depth = depth;
+        this.internalFormat = internalFormat;
+        this.hasImageMetadata = true;
+    }
+
+    private void setVulkanImageReference(VulkanImage vulkanImage) {
+        this.vulkanImage = vulkanImage;
+
+        if (vulkanImage == null) {
+            this.width = 0;
+            this.height = 0;
+            this.depth = 1;
+            this.internalFormat = 0;
+            this.hasImageMetadata = false;
+            return;
+        }
+
+        setImageMetadata(GL11.GL_TEXTURE_2D, vulkanImage.width, vulkanImage.height, 1,
+                GlUtil.getGlFormat(vulkanImage.format));
+    }
+
+    private boolean hasMetadataForTarget(int target) {
+        return hasImageMetadata && this.target == target;
+    }
+
+    private int getTexLevelParameterFromMetadata(int pName) {
+        if (!hasImageMetadata)
+            return -1;
+
+        return switch (pName) {
+            case GL11.GL_TEXTURE_INTERNAL_FORMAT -> internalFormat;
+            case GL11.GL_TEXTURE_WIDTH -> width;
+            case GL11.GL_TEXTURE_HEIGHT -> height;
+            case GL12.GL_TEXTURE_DEPTH -> depth;
+            default -> -1;
+        };
+    }
+
+    private int getTexParameter(int pName) {
+        return switch (pName) {
+            case GL11.GL_TEXTURE_MAG_FILTER -> magFilter;
+            case GL11.GL_TEXTURE_MIN_FILTER -> minFilter;
+            case GL11.GL_TEXTURE_WRAP_S -> wrapS;
+            case GL11.GL_TEXTURE_WRAP_T -> wrapT;
+            case GL30.GL_TEXTURE_MAX_LEVEL -> maxLevel;
+            case GL30.GL_TEXTURE_MAX_LOD -> maxLod;
+            case GL30.GL_TEXTURE_MIN_LOD, GL30.GL_TEXTURE_LOD_BIAS -> 0;
+            default -> 0;
+        };
+    }
+
+    private static boolean isMetadataTextureTarget(int target) {
+        return target == GL11.GL_TEXTURE_1D || target == GL12.GL_TEXTURE_3D || target == GL30.GL_TEXTURE_2D_ARRAY;
     }
 
     void allocateImage(int width, int height, int vkFormat) {
@@ -297,20 +598,48 @@ public class GlTexture {
         vulkanImage.updateTextureSampler(maxLod, samplerFlags);
     }
 
-    private void uploadSubImage(int xOffset, int yOffset, int width, int height, int format, ByteBuffer pixels) {
+    private void uploadSubImage(int xOffset, int yOffset, int width, int height, int format, ByteBuffer pixels, TextureUploadLayout layout) {
+        boolean rgba8Image = vulkanImage.format == VK_FORMAT_R8G8B8A8_UNORM || vulkanImage.format == VK_FORMAT_R8G8B8A8_SRGB;
+
         ByteBuffer src;
-        if (format == GL11.GL_RGB && vulkanImage.format == VK_FORMAT_R8G8B8A8_UNORM) {
+        if (format == GL11.GL_RGB && rgba8Image) {
             src = GlUtil.RGBtoRGBA_buffer(pixels);
-        } else if (format == GL30.GL_BGRA && vulkanImage.format == VK_FORMAT_R8G8B8A8_UNORM) {
+        } else if (format == GL30.GL_BGRA && rgba8Image) {
             src = GlUtil.BGRAtoRGBA_buffer(pixels);
         } else {
             src = pixels;
         }
 
-        this.vulkanImage.uploadSubTextureAsync(0, width, height, xOffset, yOffset, 0, 0, 0, src);
+        this.vulkanImage.uploadSubTextureAsync(0, width, height, xOffset, yOffset,
+                layout.skipRows(), layout.skipPixels(), layout.rowLength(), src);
 
         if (src != pixels) {
             MemoryUtil.memFree(src);
+        }
+    }
+
+    static TextureUploadLayout getUnpackLayout(int width) {
+        int rowLength = GlPixelStore.getInteger(GlPixelStore.GL_UNPACK_ROW_LENGTH);
+        if (rowLength <= 0) {
+            rowLength = width;
+        }
+
+        return new TextureUploadLayout(
+                rowLength,
+                GlPixelStore.getInteger(GlPixelStore.GL_UNPACK_SKIP_ROWS),
+                GlPixelStore.getInteger(GlPixelStore.GL_UNPACK_SKIP_PIXELS));
+    }
+
+    record TextureUploadLayout(int rowLength, int skipRows, int skipPixels) {
+        int sourceByteOffset(int formatSize) {
+            return (rowLength * skipRows + skipPixels) * formatSize;
+        }
+
+        int requiredByteSize(int width, int height, int formatSize) {
+            if (height <= 0) {
+                return 0;
+            }
+            return ((skipRows + height - 1) * rowLength + skipPixels + width) * formatSize;
         }
     }
 
@@ -320,8 +649,7 @@ public class GlTexture {
     }
 
     void setMaxLevel(int l) {
-        if (l < 0)
-            throw new IllegalStateException("max level cannot be < 0.");
+        l = Math.max(l, 0);
 
         if (maxLevel != l) {
             maxLevel = l;
@@ -330,8 +658,7 @@ public class GlTexture {
     }
 
     void setMaxLod(int l) {
-        if (l < 0)
-            throw new IllegalStateException("max level cannot be < 0.");
+        l = Math.max(l, 0);
 
         if (maxLod != l) {
             maxLod = l;
@@ -344,7 +671,10 @@ public class GlTexture {
             case GL11.GL_LINEAR, GL11.GL_NEAREST -> {
             }
 
-            default -> throw new IllegalArgumentException("illegal mag filter value: " + v);
+            default -> {
+                GlEmulationLog.warnOnce("texture.magFilter." + v, "Unsupported mag filter 0x{}; keeping previous value", Integer.toHexString(v));
+                return;
+            }
         }
 
         this.magFilter = v;
@@ -358,19 +688,28 @@ public class GlTexture {
                  GL11.GL_LINEAR_MIPMAP_NEAREST, GL11.GL_NEAREST_MIPMAP_NEAREST -> {
             }
 
-            default -> throw new IllegalArgumentException("illegal min filter value: " + v);
+            default -> {
+                GlEmulationLog.warnOnce("texture.minFilter." + v, "Unsupported min filter 0x{}; keeping previous value", Integer.toHexString(v));
+                return;
+            }
         }
 
         this.minFilter = v;
         updateSampler();
     }
 
-    void setClamp(int v) {
-        if (v == GL30.GL_CLAMP_TO_EDGE) {
-            this.clamp = true;
-        } else {
-            this.clamp = false;
-        }
+    void setWrapS(int v) {
+        wrapS = v;
+        updateClampMode();
+    }
+
+    void setWrapT(int v) {
+        wrapT = v;
+        updateClampMode();
+    }
+
+    private void updateClampMode() {
+        this.clamp = wrapS == GL30.GL_CLAMP_TO_EDGE && wrapT == GL30.GL_CLAMP_TO_EDGE;
 
         updateSampler();
     }
@@ -380,7 +719,7 @@ public class GlTexture {
     }
 
     public void setVulkanImage(VulkanImage vulkanImage) {
-        this.vulkanImage = vulkanImage;
+        setVulkanImageReference(vulkanImage);
     }
 
 }
