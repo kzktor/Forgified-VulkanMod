@@ -38,4 +38,16 @@ class GlEmulationLogContractTest {
         assertTrue(cause instanceof IllegalArgumentException);
         assertTrue(cause.getMessage().contains("GL contract family"));
     }
+
+    @Test
+    void contractGapRejectsNullFamilyWithClearException() throws Exception {
+        Method method = GlEmulationLog.class.getDeclaredMethod("contractGapKey", String.class, String.class);
+        method.setAccessible(true);
+
+        ReflectiveOperationException exception = assertThrows(ReflectiveOperationException.class,
+                () -> method.invoke(null, null, "glReadPixels"));
+        Throwable cause = exception.getCause();
+        assertTrue(cause instanceof IllegalArgumentException);
+        assertTrue(cause.getMessage().contains("GL contract family"));
+    }
 }

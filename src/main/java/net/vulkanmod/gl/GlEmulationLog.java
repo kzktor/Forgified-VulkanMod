@@ -37,7 +37,7 @@ public final class GlEmulationLog {
     }
 
     private static String contractGapKey(String family, String operation) {
-        if (!CONTRACT_FAMILIES.contains(family)) {
+        if (family == null || !CONTRACT_FAMILIES.contains(family)) {
             throw new IllegalArgumentException("Unknown GL contract family: " + family);
         }
         if (operation == null || operation.isBlank()) {
