@@ -344,6 +344,7 @@ import java.lang.reflect.Method;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class GlEmulationLogContractTest {
@@ -369,13 +370,11 @@ class GlEmulationLogContractTest {
         Method method = GlEmulationLog.class.getDeclaredMethod("contractGapKey", String.class, String.class);
         method.setAccessible(true);
 
-        try {
-            method.invoke(null, "flywheel", "backend");
-        } catch (ReflectiveOperationException exception) {
-            Throwable cause = exception.getCause();
-            assertTrue(cause instanceof IllegalArgumentException);
-            assertTrue(cause.getMessage().contains("GL contract family"));
-        }
+        ReflectiveOperationException exception = assertThrows(ReflectiveOperationException.class,
+                () -> method.invoke(null, "flywheel", "backend"));
+        Throwable cause = exception.getCause();
+        assertTrue(cause instanceof IllegalArgumentException);
+        assertTrue(cause.getMessage().contains("GL contract family"));
     }
 }
 ```
@@ -392,7 +391,7 @@ Expected: compilation fails because `warnContractGap` and `contractGapKey` do no
 
 - [ ] **Step 4: Add contract gap helpers**
 
-In `src/main/java/net/vulkanmod/gl/GlEmulationLog.java`, add this code inside the class:
+In `src/main/java/net/vulkanmod/gl/GlEmulationLog.java`, make the class public if it is currently package-private, then add this code inside the class:
 
 ```java
 private static final java.util.Set<String> CONTRACT_FAMILIES = java.util.Set.of(
