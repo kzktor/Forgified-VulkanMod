@@ -10,6 +10,8 @@ import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.nio.LongBuffer;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
@@ -121,6 +123,16 @@ class GlFunctionRegistryTest {
             assertNotNull(family, "Missing GL contract family for " + name);
             assertFalse(family.isBlank(), "Blank GL contract family for " + name);
         }
+    }
+
+    @Test
+    void compressedTexImage2DProviderPathPassesPayloadToTextureLayer() throws Exception {
+        String source = Files.readString(Path.of("src/main/java/net/vulkanmod/compat/opengl/GlFunctionRegistry.java"));
+
+        assertTrue(source.contains("glCompressedTexImage2D"));
+        assertTrue(source.contains("MemoryUtil.memByteBuffer"));
+        assertTrue(source.contains("GlTexture.compressedTexImage2D(target, level, internalFormat, width, height, border, dataBuffer)"),
+                "provider path must preserve compressed payload instead of recording metadata only");
     }
 
     @Test

@@ -1080,7 +1080,18 @@ public final class GlFunctionRegistry {
         fn("glActiveTexture", "V:i", (ret, args) -> GlTexture.activeTexture(argI(args, 0)));
         noop("glSampleCoverage", "V:fb");
         noop("glCompressedTexImage1D", "V:iiiiiip");
-        noop("glCompressedTexImage2D", "V:iiiiiiip");
+        fn("glCompressedTexImage2D", "V:iiiiiiip", (ret, args) -> {
+            int target = argI(args, 0);
+            int level = argI(args, 1);
+            int internalFormat = argI(args, 2);
+            int width = argI(args, 3);
+            int height = argI(args, 4);
+            int border = argI(args, 5);
+            int imageSize = argI(args, 6);
+            long data = argP(args, 7);
+            java.nio.ByteBuffer dataBuffer = data != 0L && imageSize > 0 ? MemoryUtil.memByteBuffer(data, imageSize) : null;
+            GlTexture.compressedTexImage2D(target, level, internalFormat, width, height, border, dataBuffer);
+        });
         noop("glCompressedTexImage3D", "V:iiiiiiiip");
         noop("glCompressedTexSubImage1D", "V:iiiiiip");
         noop("glCompressedTexSubImage2D", "V:iiiiiiiip");
