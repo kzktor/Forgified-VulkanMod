@@ -3,40 +3,48 @@ package net.vulkanmod.mixin.render;
 import com.mojang.blaze3d.platform.Window;
 import com.mojang.blaze3d.shaders.Program;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormat;
+import com.google.gson.JsonObject;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceProvider;
+import net.minecraft.util.GsonHelper;
 import net.vulkanmod.Initializer;
 import net.vulkanmod.interfaces.ShaderMixed;
+import net.vulkanmod.gl.GlEmulationLog;
 import net.vulkanmod.vulkan.shader.GraphicsPipeline;
 import net.vulkanmod.vulkan.shader.Pipeline;
 import net.vulkanmod.vulkan.shader.descriptor.UBO;
 import net.vulkanmod.vulkan.shader.layout.Uniform;
 import net.vulkanmod.vulkan.shader.parser.GlslConverter;
 import net.vulkanmod.vulkan.util.MappedBuffer;
-import org.apache.commons.io.IOUtils;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.MemoryUtil;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Overwrite;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Supplier;
 
-@Mixin(ShaderInstance.class)
+// Inject-cancel instead of @Overwrite for close/apply/clear so mods injecting into
+// the vanilla shader lifecycle keep valid targets; priority 900 lets default-priority
+// HEAD observers run before the cancelling callback.
+@Mixin(value = ShaderInstance.class, priority = 900)
 public class ShaderInstanceM implements ShaderMixed {
 
     @Shadow @Final private Map<String, com.mojang.blaze3d.shaders.Uniform> uniformMap;
@@ -58,8 +66,11 @@ public class ShaderInstanceM implements ShaderMixed {
 
     private String vsPath;
     private String fsName;
+    private String vulkanBindPath;
+    private VertexFormat pipelineFormat;
 
     private GraphicsPipeline pipeline;
+    private final Map<VertexFormat, GraphicsPipeline> variantPipelines = new HashMap<>();
     boolean isLegacy = false;
 
 
@@ -67,62 +78,121 @@ public class ShaderInstanceM implements ShaderMixed {
         return pipeline;
     }
 
-    @Inject(method = "<init>", at = @At("RETURN"))
-    private void create(ResourceProvider resourceProvider, String name, VertexFormat format, CallbackInfo ci) {
+    public GraphicsPipeline getPipeline(VertexFormat drawFormat) {
+        if (this.pipeline == null || drawFormat == null || drawFormat.equals(this.pipelineFormat)) {
+            return this.pipeline;
+        }
+
+        if (this.isLegacy || this.vulkanBindPath == null) {
+            return this.pipeline;
+        }
+
+        return this.variantPipelines.computeIfAbsent(drawFormat, this::createPipelineVariant);
+    }
+
+    @Inject(method = "<init>(Lnet/minecraft/server/packs/resources/ResourceProvider;Lnet/minecraft/resources/ResourceLocation;Lcom/mojang/blaze3d/vertex/VertexFormat;)V", at = @At("RETURN"))
+    private void create_loc(ResourceProvider resourceProvider, ResourceLocation location, VertexFormat format, CallbackInfo ci) {
+        this.create(resourceProvider, location.toString(), format);
+    }
+
+    @Inject(method = "<init>(Lnet/minecraft/server/packs/resources/ResourceProvider;Ljava/lang/String;Lcom/mojang/blaze3d/vertex/VertexFormat;)V", at = @At("RETURN"))
+    private void create_str(ResourceProvider resourceProvider, String name, VertexFormat format, CallbackInfo ci) {
+        this.create(resourceProvider, name, format);
+    }
+
+    private void create(ResourceProvider resourceProvider, String name, VertexFormat format) {
+        String path;
+        String namespace = "minecraft";
+        String namePath = name;
+
+        if (name.contains(":")) {
+            String[] split = name.split(String.valueOf(ResourceLocation.NAMESPACE_SEPARATOR), 2);
+            namespace = split[0];
+            namePath = split.length > 1 ? split[1] : "";
+        }
+
+        if (!isUsableShaderPath(namePath)) {
+            Initializer.LOGGER.warn("Skipping unsupported shader {}: empty shader path", name);
+            return;
+        }
+
+        if (name.contains(String.valueOf(ResourceLocation.NAMESPACE_SEPARATOR))) {
+            path = ResourceLocation.fromNamespaceAndPath(namespace, "shaders/core/%s".formatted(namePath)).toString();
+        } else {
+            path = "shaders/core/%s".formatted(name);
+        }
+        this.vsPath = path;
+        this.fsName = path;
+        this.pipelineFormat = format;
 
         try {
-            if (Pipeline.class.getResourceAsStream(String.format("/assets/vulkanmod/shaders/minecraft/core/%s/%s.json", name, name)) == null) {
+            String bindPath = String.format("%s/core/%s/%s", namespace, namePath, namePath);
+            if (!hasVulkanShader(bindPath)) {
                 createLegacyShader(resourceProvider, format);
                 return;
             }
 
-            String path = String.format("minecraft/core/%s/%s", name, name);
-            Pipeline.Builder pipelineBuilder = new Pipeline.Builder(format, path);
+            this.vulkanBindPath = bindPath;
+            Pipeline.Builder pipelineBuilder = new Pipeline.Builder(format, bindPath);
             pipelineBuilder.parseBindingsJSON();
             pipelineBuilder.compileShaders();
             this.pipeline = pipelineBuilder.createGraphicsPipeline();
         } catch (Exception e) {
-            System.out.printf("Error on shader %s creation\n", name);
-            e.printStackTrace();
-            throw e;
+            // External mods construct ShaderInstances we cannot anticipate (e.g. Veil
+            // program wrappers with synthetic resource providers); never let shader
+            // creation crash the constructor - try GLSL conversion instead.
+            Initializer.LOGGER.error("Error on shader {} creation, attempting conversion fallback", name, e);
+            createLegacyShader(resourceProvider, format);
         }
     }
 
-    @Redirect(method = "<init>", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/ShaderInstance;getOrCreate(Lnet/minecraft/server/packs/resources/ResourceProvider;Lcom/mojang/blaze3d/shaders/Program$Type;Ljava/lang/String;)Lcom/mojang/blaze3d/shaders/Program;"))
-    private Program loadNames(ResourceProvider resourceProvider, Program.Type type, String name) {
-        String path;
-        if (this.name.contains(String.valueOf(ResourceLocation.NAMESPACE_SEPARATOR))) {
-            ResourceLocation location = ResourceLocation.tryParse(name);
-            path = location.withPath("shaders/core/%s".formatted(location.getPath())).toString();
-        } else {
-            path = "shaders/core/%s".formatted(name);
+    // Classpath is the source of truth here: Pipeline.Builder.parseBindingsJSON reads
+    // bundled assets only. Probing the ResourceProvider false-positives with mods whose
+    // synthetic providers answer every location (Veil shader wrappers).
+    private static boolean hasVulkanShader(String bindPath) {
+        String resourcePath = "/assets/vulkanmod/shaders/%s.json".formatted(bindPath);
+        try (InputStream stream = Pipeline.class.getResourceAsStream(resourcePath)) {
+            return stream != null;
+        } catch (IOException exception) {
+            throw new RuntimeException("Failed to inspect Vulkan shader resource: " + resourcePath, exception);
         }
-
-        switch (type) {
-            case VERTEX -> this.vsPath = path;
-            case FRAGMENT -> this.fsName = path;
-        }
-
-        return null;
     }
 
-    @Redirect(method = "<init>", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/shaders/Uniform;glBindAttribLocation(IILjava/lang/CharSequence;)V"))
+    private GraphicsPipeline createPipelineVariant(VertexFormat drawFormat) {
+        try {
+            Pipeline.Builder pipelineBuilder = new Pipeline.Builder(drawFormat, this.vulkanBindPath);
+            pipelineBuilder.parseBindingsJSON();
+            pipelineBuilder.compileShaders();
+            return pipelineBuilder.createGraphicsPipeline();
+        } catch (Exception e) {
+            Initializer.LOGGER.error("Error creating shader {} pipeline variant for draw format {}", this.name, drawFormat, e);
+            return this.pipeline;
+        }
+    }
+
+    private static boolean isUsableShaderPath(String namePath) {
+        return namePath != null && !namePath.isBlank();
+    }
+
+    @Redirect(method = "<init>(Lnet/minecraft/server/packs/resources/ResourceProvider;Lnet/minecraft/resources/ResourceLocation;Lcom/mojang/blaze3d/vertex/VertexFormat;)V", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/shaders/Uniform;glBindAttribLocation(IILjava/lang/CharSequence;)V"))
     private void bindAttr(int program, int index, CharSequence name) {}
 
-    /**
-     * @author
-     */
-    @Overwrite
-    public void close() {
+    @Inject(method = "close", at = @At("HEAD"), cancellable = true)
+    public void close(CallbackInfo ci) {
         if (this.pipeline != null)
             this.pipeline.cleanUp();
+        this.variantPipelines.values().forEach(variantPipeline -> {
+            if (variantPipeline != null && variantPipeline != this.pipeline) {
+                variantPipeline.cleanUp();
+            }
+        });
+        this.variantPipelines.clear();
+        ci.cancel();
     }
 
-    /**
-     * @author
-     */
-    @Overwrite
-    public void apply() {
+    @Inject(method = "apply", at = @At("HEAD"), cancellable = true)
+    public void apply(CallbackInfo ci) {
+        ci.cancel();
         if (!this.isLegacy)
             return;
 
@@ -176,11 +246,10 @@ public class ShaderInstanceM implements ShaderMixed {
         }
     }
 
-    /**
-     * @author
-     */
-    @Overwrite
-    public void clear() {}
+    @Inject(method = "clear", at = @At("HEAD"), cancellable = true)
+    public void clear(CallbackInfo ci) {
+        ci.cancel();
+    }
 
     private void setUniformSuppliers(UBO ubo) {
 
@@ -188,6 +257,10 @@ public class ShaderInstanceM implements ShaderMixed {
             com.mojang.blaze3d.shaders.Uniform uniform = this.uniformMap.get(vUniform.getName());
 
             if (uniform == null) {
+                if (vUniform.hasSupplier()) {
+                    Initializer.LOGGER.debug("Continuing with global shader uniform supplier for {}", vUniform.getName());
+                    continue;
+                }
                 Initializer.LOGGER.error(String.format("Error: field %s not present in uniform map", vUniform.getName()));
                 continue;
             }
@@ -214,17 +287,26 @@ public class ShaderInstanceM implements ShaderMixed {
 
     private void createLegacyShader(ResourceProvider resourceProvider, VertexFormat format) {
         try {
-            String vertPath = this.vsPath + ".vsh";
-            Resource resource = resourceProvider.getResourceOrThrow(ResourceLocation.tryParse(vertPath));
-            InputStream inputStream = resource.open();
-            String vshSrc = IOUtils.toString(inputStream, StandardCharsets.UTF_8);
+            ResourceLocation jsonLocation = ResourceLocation.tryParse(this.vsPath + ".json");
+            Resource resource = resourceProvider.getResourceOrThrow(jsonLocation);
+            JsonObject jsonObject;
+            try (InputStream inputStream = resource.open()) {
+                jsonObject = GsonHelper.parse(new InputStreamReader(inputStream, StandardCharsets.UTF_8));
+            }
 
-            String fragPath = this.fsName + ".fsh";
-            resource = resourceProvider.getResourceOrThrow(ResourceLocation.tryParse(fragPath));
+            ResourceLocation vertLocation = resolveShaderStageLocation(GsonHelper.getAsString(jsonObject, "vertex"), "vsh");
+            ResourceLocation fragLocation = resolveShaderStageLocation(GsonHelper.getAsString(jsonObject, "fragment"), "fsh");
+
+            resource = resourceProvider.getResourceOrThrow(vertLocation);
+            InputStream inputStream = resource.open();
+            String vshSrc = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+
+            resource = resourceProvider.getResourceOrThrow(fragLocation);
             inputStream = resource.open();
-            String fshSrc = IOUtils.toString(inputStream, StandardCharsets.UTF_8);
+            String fshSrc = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
 
             GlslConverter converter = new GlslConverter();
+            converter.setFormat(format);
             Pipeline.Builder builder = new Pipeline.Builder(format, this.name);
 
             converter.process(vshSrc, fshSrc);
@@ -238,9 +320,76 @@ public class ShaderInstanceM implements ShaderMixed {
             this.isLegacy = true;
 
         } catch (Exception e) {
-            Initializer.LOGGER.error("Error on shader {} conversion/compilation", this.name);
-            e.printStackTrace();
+            Initializer.LOGGER.error("Error on shader {} conversion/compilation", this.name, e);
+            GlEmulationLog.warnContractGap("shader_conversion", "fallbackShader",
+                    "Using generic fallback shader for unsupported GLSL contract {}; shader={}",
+                    classifyShaderFailure(e), this.name);
+            createExternalFallbackShader(format);
         }
+    }
+
+    private static String classifyShaderFailure(Throwable throwable) {
+        String message = throwable != null && throwable.getMessage() != null ? throwable.getMessage().toLowerCase(java.util.Locale.ROOT) : "";
+        if (message.contains("include")) return "include";
+        if (message.contains("uniform")) return "uniform";
+        if (message.contains("sampler")) return "sampler";
+        if (message.contains("attribute") || message.contains("attrib")) return "attribute";
+        if (message.contains("syntax")) return "syntax";
+        return "unknown";
+    }
+
+    private void createExternalFallbackShader(VertexFormat format) {
+        String fallbackPath = fallbackShaderPath(format);
+        if (fallbackPath == null) {
+            Initializer.LOGGER.warn("No safe Vulkan fallback shader for {} with vertex format {}", this.name, format);
+            return;
+        }
+
+        try {
+            Pipeline.Builder builder = new Pipeline.Builder(format, fallbackPath);
+            builder.parseBindingsJSON();
+            builder.compileShaders();
+            this.pipeline = builder.createGraphicsPipeline();
+            this.vulkanBindPath = fallbackPath;
+            this.pipelineFormat = format;
+            this.isLegacy = false;
+            Initializer.LOGGER.warn("Using Vulkan fallback shader {} for external shader {}", fallbackPath, this.name);
+        } catch (Exception fallbackException) {
+            Initializer.LOGGER.error("Error creating Vulkan fallback shader {} for {}", fallbackPath, this.name, fallbackException);
+        }
+    }
+
+    private static String fallbackShaderPath(VertexFormat format) {
+        if (DefaultVertexFormat.POSITION_TEX_COLOR.equals(format)) {
+            return "minecraft/core/position_tex_color/position_tex_color";
+        }
+
+        if (DefaultVertexFormat.POSITION_TEX.equals(format)) {
+            return "minecraft/core/position_tex/position_tex";
+        }
+
+        if (DefaultVertexFormat.POSITION_COLOR_TEX_LIGHTMAP.equals(format)) {
+            return "minecraft/core/position_color_tex_lightmap/position_color_tex_lightmap";
+        }
+
+        if (DefaultVertexFormat.POSITION_COLOR.equals(format)) {
+            return "minecraft/core/position_color/position_color";
+        }
+
+        if (DefaultVertexFormat.POSITION.equals(format)) {
+            return "minecraft/core/position/position";
+        }
+
+        return null;
+    }
+
+    private static ResourceLocation resolveShaderStageLocation(String stageName, String extension) {
+        ResourceLocation stage = ResourceLocation.tryParse(stageName);
+        if (stage == null) {
+            throw new IllegalArgumentException("Invalid shader stage: " + stageName);
+        }
+
+        return ResourceLocation.fromNamespaceAndPath(stage.getNamespace(), "shaders/core/%s.%s".formatted(stage.getPath(), extension));
     }
 }
 
