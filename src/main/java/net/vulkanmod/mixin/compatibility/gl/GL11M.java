@@ -4,7 +4,7 @@ import net.minecraft.client.Minecraft;
 import net.vulkanmod.compat.gl.GlCapabilityState;
 import net.vulkanmod.compat.gl.GlIntegerState;
 import net.vulkanmod.compat.gl.GlPixelStore;
-import net.vulkanmod.compat.external.ExternalTerrainRenderBridge;
+import net.vulkanmod.compat.opengl.GlDrawContract;
 import net.vulkanmod.gl.GlBuffer;
 import net.vulkanmod.gl.GlEmulationLog;
 import net.vulkanmod.gl.GlFramebuffer;
@@ -474,12 +474,12 @@ public class GL11M {
 
     @Overwrite(remap = false)
     public static void glDrawElements(@NativeType("GLenum") int mode, @NativeType("GLsizei") int count, @NativeType("GLenum") int type, @NativeType("void const *") long indices) {
-        ExternalTerrainRenderBridge.drawElements(mode, count, type, indices);
+        GlDrawContract.drawElements(mode, count, type, indices);
     }
 
     @Overwrite(remap = false)
     public static void glDrawArrays(@NativeType("GLenum") int mode, @NativeType("GLint") int first, @NativeType("GLsizei") int count) {
-        ExternalTerrainRenderBridge.drawArrays(mode, first, count);
+        GlDrawContract.drawArrays(mode, first, count);
     }
 
     @Overwrite(remap = false)

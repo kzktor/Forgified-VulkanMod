@@ -1,7 +1,7 @@
 package net.vulkanmod.compat.opengl;
 
 import net.minecraft.client.Minecraft;
-import net.vulkanmod.compat.external.ExternalTerrainRenderBridge;
+import net.vulkanmod.compat.opengl.GlDrawContract;
 import net.vulkanmod.compat.gl.GlCapabilityState;
 import net.vulkanmod.compat.gl.GlIntegerState;
 import net.vulkanmod.compat.gl.GlPixelStore;
@@ -1067,12 +1067,12 @@ public final class GlFunctionRegistry {
         noop("glDrawBuffer", "V:i");
         noop("glReadBuffer", "V:i");
         noop("glReadPixels", "V:iiiiiip");
-        fn("glDrawArrays", "V:iii", (ret, args) -> ExternalTerrainRenderBridge.drawArrays(argI(args, 0), argI(args, 1), argI(args, 2)));
-        fn("glDrawElements", "V:iiip", (ret, args) -> ExternalTerrainRenderBridge.drawElements(argI(args, 0), argI(args, 1), argI(args, 2), argP(args, 3)));
+        fn("glDrawArrays", "V:iii", (ret, args) -> GlDrawContract.drawArrays(argI(args, 0), argI(args, 1), argI(args, 2)));
+        fn("glDrawElements", "V:iiip", (ret, args) -> GlDrawContract.drawElements(argI(args, 0), argI(args, 1), argI(args, 2), argP(args, 3)));
     }
 
     private static void registerGl12to14() {
-        fn("glDrawRangeElements", "V:iiiiip", (ret, args) -> ExternalTerrainRenderBridge.drawElements(argI(args, 0), argI(args, 3), argI(args, 4), argP(args, 5)));
+        fn("glDrawRangeElements", "V:iiiiip", (ret, args) -> GlDrawContract.drawElements(argI(args, 0), argI(args, 3), argI(args, 4), argP(args, 5)));
         noop("glTexImage3D", "V:iiiiiiiiip");
         noop("glTexSubImage3D", "V:iiiiiiiiiip");
         noop("glCopyTexSubImage3D", "V:iiiiiiiii");
@@ -1107,7 +1107,7 @@ public final class GlFunctionRegistry {
             long count = argP(args, 2);
             int drawCount = argI(args, 3);
             for (int i = 0; i < drawCount && first != 0 && count != 0; i++) {
-                ExternalTerrainRenderBridge.drawArrays(mode, MemoryUtil.memGetInt(first + 4L * i), MemoryUtil.memGetInt(count + 4L * i));
+                GlDrawContract.drawArrays(mode, MemoryUtil.memGetInt(first + 4L * i), MemoryUtil.memGetInt(count + 4L * i));
             }
         });
         fn("glMultiDrawElements", "V:ipipi", (ret, args) -> {
@@ -1117,7 +1117,7 @@ public final class GlFunctionRegistry {
             long indices = argP(args, 3);
             int drawCount = argI(args, 4);
             for (int i = 0; i < drawCount && count != 0 && indices != 0; i++) {
-                ExternalTerrainRenderBridge.drawElements(mode, MemoryUtil.memGetInt(count + 4L * i), type,
+                GlDrawContract.drawElements(mode, MemoryUtil.memGetInt(count + 4L * i), type,
                         MemoryUtil.memGetAddress(indices + (long) i * Long.BYTES));
             }
         });
@@ -1588,7 +1588,7 @@ public final class GlFunctionRegistry {
         });
         fn("glDrawElementsBaseVertex", "V:iiipi", (ret, args) -> {
             if (argI(args, 4) == 0) {
-                ExternalTerrainRenderBridge.drawElements(argI(args, 0), argI(args, 1), argI(args, 2), argP(args, 3));
+                GlDrawContract.drawElements(argI(args, 0), argI(args, 1), argI(args, 2), argP(args, 3));
             }
         });
         noop("glDrawRangeElementsBaseVertex", "V:iiiiipi");
