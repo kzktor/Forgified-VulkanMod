@@ -157,3 +157,23 @@ This goal is satisfied only when:
 - performance remains within measured bounds on the target packs.
 
 Until then, the honest claim is "universal GL compatibility is improving by contract family," not "100% every mod works."
+
+## Verification Commands
+
+Focused universal GL suite:
+
+```powershell
+.\gradlew.bat test --tests net.vulkanmod.compat.UniversalGlContractLedgerTest --tests net.vulkanmod.compat.UniversalGlNoCrashPolicyTest --tests net.vulkanmod.gl.GlEmulationLogContractTest --tests net.vulkanmod.compat.GlFunctionRegistryTest --tests net.vulkanmod.compat.GlCapabilitiesFallbackTest --tests net.vulkanmod.compat.GlCallCoverageTest --tests net.vulkanmod.gl.GlTextureTest --tests net.vulkanmod.gl.GlTextureDimensionalContractTest --tests net.vulkanmod.compat.gl.FramebufferReadbackContractTest --tests net.vulkanmod.compat.ShaderContractFallbackTest --tests net.vulkanmod.compat.DrawContractRoutingTest --tests net.vulkanmod.compat.RuntimeSmokeScriptTest
+```
+
+Full build:
+
+```powershell
+.\gradlew.bat build
+```
+
+Runtime smoke classifier:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\gl-runtime-smoke-check.ps1 -LogPath run\logs\latest.log
+```
