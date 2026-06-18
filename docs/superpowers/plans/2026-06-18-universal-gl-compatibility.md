@@ -188,7 +188,7 @@ class UniversalGlNoCrashPolicyTest {
             if (!Files.exists(root)) continue;
             try (Stream<Path> files = Files.walk(root)) {
                 for (Path file : files.filter(path -> path.toString().endsWith(".java")).toList()) {
-                    String source = Files.readString(file).toLowerCase(Locale.ROOT);
+                    String source = Files.readString(file);
                     for (String forbidden : List.of(
                             "create",
                             "flywheel",
@@ -199,8 +199,8 @@ class UniversalGlNoCrashPolicyTest {
                             "veil",
                             "lodestone",
                             "tensura")) {
-                        if (source.contains(forbidden)) {
-                            violations.append(file).append(" contains ").append(forbidden).append('\n');
+                        if (containsModTargetingBranch(source, forbidden)) {
+                            violations.append(file).append(" contains mod-targeting branch for ").append(forbidden).append('\n');
                         }
                     }
                 }
@@ -227,6 +227,33 @@ class UniversalGlNoCrashPolicyTest {
 
         assertTrue(violations.isEmpty(), () -> "GL compatibility must degrade by contract gap, not UnsupportedOperationException:\n" + violations);
     }
+
+    private static boolean containsModTargetingBranch(String source, String modId) {
+        String lower = stripLineComments(source).toLowerCase(Locale.ROOT);
+        for (String branch : List.of("if", "switch", "case")) {
+            if (lower.contains(branch) && containsModToken(lower, modId)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean containsModToken(String source, String modId) {
+        return source.contains("\"" + modId + "\"")
+                || source.contains("'" + modId + "'")
+                || source.contains("modid=" + modId)
+                || source.contains("mod_id=" + modId)
+                || source.contains("mod id " + modId);
+    }
+
+    private static String stripLineComments(String source) {
+        StringBuilder stripped = new StringBuilder(source.length());
+        for (String line : source.split("\\R", -1)) {
+            int commentStart = line.indexOf("//");
+            stripped.append(commentStart >= 0 ? line.substring(0, commentStart) : line).append('\n');
+        }
+        return stripped.toString();
+    }
 }
 ```
 
@@ -240,9 +267,9 @@ Run:
 
 Expected: if the scan fails, it names exact files that still mention a mod name or hard unsupported exception inside universal GL code. Treat this as inventory, not a production fix yet.
 
-- [ ] **Step 3: If the scan fails on comments only, narrow the scan to executable code**
+- [ ] **Step 3: If the scan fails on comments only, narrow the hard-fail scan to executable code**
 
-Replace the source read line in both tests:
+Replace the source read line in the hard-fail test:
 
 ```java
 String source = Files.readString(file).toLowerCase(Locale.ROOT);
@@ -254,7 +281,7 @@ with:
 String source = stripLineComments(Files.readString(file)).toLowerCase(Locale.ROOT);
 ```
 
-Add this helper at the end of the class:
+If the helper is not already present, add this helper at the end of the class:
 
 ```java
 private static String stripLineComments(String source) {
@@ -267,7 +294,7 @@ private static String stripLineComments(String source) {
 }
 ```
 
-Make the same replacement in the second test before checking for `UnsupportedOperationException`.
+The mod-target branch test should continue using `containsModTargetingBranch(...)` so normal GL names such as `glCreateProgram` are not treated as references to the Create mod.
 
 - [ ] **Step 4: Run the policy test**
 
