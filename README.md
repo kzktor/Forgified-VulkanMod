@@ -13,6 +13,22 @@ Original authors and contributors: xCollateral and VulkanMod contributors.
 
 Fork maintainer: Rindw.
 
+## Support
+
+[![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/rindw)
+
+This Ko-fi link supports maintenance of this unofficial NeoForge fork.
+
+## Features
+
+- NeoForge support for Minecraft 1.21.1.
+- Vulkan-based renderer that replaces Minecraft's default OpenGL rendering path.
+- Reduced CPU overhead through Vulkan rendering and optimized chunk submission.
+- Chunk rendering and culling optimizations for smoother world rendering.
+- GPU selection and a revamped in-game graphics settings screen.
+- Compatibility helpers for external render paths, GUI rendering, and OpenGL-style calls used by other mods.
+- Performance preset and render scale options for easier tuning.
+
 ## License
 
 This project remains licensed under the GNU Lesser General Public License version 3.0 only. See [LICENSE](LICENSE) for the LGPLv3 terms and [COPYING](COPYING) for the GPLv3 text referenced by the LGPLv3.
