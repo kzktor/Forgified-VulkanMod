@@ -1,22 +1,20 @@
 package net.vulkanmod.render.chunk.build;
 
-import net.fabricmc.fabric.api.client.render.fluid.v1.FluidRenderHandler;
-import net.fabricmc.fabric.api.client.render.fluid.v1.FluidRenderHandlerRegistry;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.tags.FluidTags;
 import net.minecraft.util.Mth;
+import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.level.BlockAndTintGetter;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.level.material.FluidState;
-import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
+import net.neoforged.neoforge.client.extensions.common.IClientFluidTypeExtensions;
 import net.vulkanmod.render.chunk.build.light.LightPipeline;
 import net.vulkanmod.render.chunk.build.light.data.QuadLightData;
 import net.vulkanmod.render.chunk.build.thread.BuilderResources;
@@ -33,8 +31,10 @@ public class LiquidRenderer {
     private static final float MAX_FLUID_HEIGHT = 0.8888889F;
 
     private final BlockPos.MutableBlockPos mBlockPos = new BlockPos.MutableBlockPos();
+    private final BlockPos.MutableBlockPos upperBlockPos = new BlockPos.MutableBlockPos();
 
     private final ModelQuad modelQuad = new ModelQuad();
+    private final TextureAtlasSprite[] sprites = new TextureAtlasSprite[3];
 
     BuilderResources resources;
 
@@ -72,7 +72,6 @@ public class LiquidRenderer {
         if (adjBlockState.getFluidState().getType().isSame(fluidState.getType()))
             return false;
 
-        // self-occlusion by waterlogging
         if (blockState.canOcclude()) {
             return !blockState.isFaceSturdy(blockAndTintGetter, blockPos, direction);
         }
@@ -88,10 +87,14 @@ public class LiquidRenderer {
     public void tessellate(BlockState blockState, FluidState fluidState, BlockPos blockPos, TerrainBufferBuilder vertexConsumer) {
         BlockAndTintGetter region = this.resources.region;
 
-        final FluidRenderHandler handler = getFluidRenderHandler(fluidState);
-        int color = handler.getFluidColor(region, blockPos, fluidState);
+        IClientFluidTypeExtensions extensions = IClientFluidTypeExtensions.of(fluidState);
+        int color = extensions.getTintColor(fluidState, region, blockPos);
 
-        TextureAtlasSprite[] sprites = handler.getFluidSprites(region, blockPos, fluidState);
+        var atlas = Minecraft.getInstance().getTextureAtlas(InventoryMenu.BLOCK_ATLAS);
+        sprites[0] = atlas.apply(extensions.getStillTexture(fluidState, region, blockPos));
+        sprites[1] = atlas.apply(extensions.getFlowingTexture(fluidState, region, blockPos));
+        var overlay = extensions.getOverlayTexture(fluidState, region, blockPos);
+        sprites[2] = overlay != null ? atlas.apply(overlay) : null;
 
         float r = ColorUtil.ARGB.unpackR(color);
         float g = ColorUtil.ARGB.unpackG(color);
@@ -111,7 +114,6 @@ public class LiquidRenderer {
         BlockState westState = getAdjBlockState(region, posX, posY, posZ, Direction.WEST);
         BlockState eastState = getAdjBlockState(region, posX, posY, posZ, Direction.EAST);
 
-//        boolean rUf = !isNeighborSameFluid(fluidState, upFluid);
         boolean rUf = shouldRenderFace(region, blockPos, fluidState, blockState, Direction.UP, upState);
         boolean rDf = shouldRenderFace(region, blockPos, fluidState, blockState, Direction.DOWN, downState)
                 && !isFaceOccludedByState(region, MAX_FLUID_HEIGHT, Direction.DOWN, blockPos, downState);
@@ -150,7 +152,6 @@ public class LiquidRenderer {
         float x0 = (posX & 15);
         float y0 = (posY & 15);
         float z0 = (posZ & 15);
-//            float x = 0.001F;
         float y = rDf ? 0.001F : 0.0F;
 
         modelQuad.setFlags(0);
@@ -324,8 +325,8 @@ public class LiquidRenderer {
             TextureAtlasSprite sprite = sprites[1];
             boolean isOverlay = false;
 
-            if (sprites.length > 2) {
-                if (FluidRenderHandlerRegistry.INSTANCE.isBlockTransparent(adjState.getBlock())) {
+            if (sprites[2] != null) {
+                if (!adjState.isSolidRender(region, blockPos)) {
                     sprite = sprites[2];
                     isOverlay = true;
                 }
@@ -356,47 +357,53 @@ public class LiquidRenderer {
         }
     }
 
-    private static FluidRenderHandler getFluidRenderHandler(FluidState fluidState) {
-        FluidRenderHandler handler = FluidRenderHandlerRegistry.INSTANCE.get(fluidState.getType());
-
-        // Fallback to water in case no handler was found
-        if (handler == null) {
-            handler = FluidRenderHandlerRegistry.INSTANCE.get(Fluids.WATER);
-        }
-
-        return handler;
-    }
-
     private float calculateAverageHeight(BlockAndTintGetter blockAndTintGetter, Fluid fluid, float f, float g, float h, BlockPos blockPos) {
         if (!(h >= 1.0F) && !(g >= 1.0F)) {
-            float[] fs = new float[2];
+            float weightedHeight = 0.0F;
+            float weight = 0.0F;
             if (h > 0.0F || g > 0.0F) {
                 float i = this.getHeight(blockAndTintGetter, fluid, blockPos);
                 if (i >= 1.0F) {
                     return 1.0F;
                 }
 
-                this.addWeightedHeight(fs, i);
+                if (i >= 0.8F) {
+                    weightedHeight += i * 10.0F;
+                    weight += 10.0F;
+                } else if (i >= 0.0F) {
+                    weightedHeight += i;
+                    weight++;
+                }
             }
 
-            this.addWeightedHeight(fs, f);
-            this.addWeightedHeight(fs, h);
-            this.addWeightedHeight(fs, g);
-            return fs[0] / fs[1];
+            if (f >= 0.8F) {
+                weightedHeight += f * 10.0F;
+                weight += 10.0F;
+            } else if (f >= 0.0F) {
+                weightedHeight += f;
+                weight++;
+            }
+
+            if (h >= 0.8F) {
+                weightedHeight += h * 10.0F;
+                weight += 10.0F;
+            } else if (h >= 0.0F) {
+                weightedHeight += h;
+                weight++;
+            }
+
+            if (g >= 0.8F) {
+                weightedHeight += g * 10.0F;
+                weight += 10.0F;
+            } else if (g >= 0.0F) {
+                weightedHeight += g;
+                weight++;
+            }
+
+            return weightedHeight / weight;
         } else {
             return 1.0F;
         }
-    }
-
-    private void addWeightedHeight(float[] fs, float f) {
-        if (f >= 0.8F) {
-            fs[0] += f * 10.0F;
-            fs[1] += 10.0F;
-        } else if (f >= 0.0F) {
-            fs[0] += f;
-            fs[1]++;
-        }
-
     }
 
     private float getHeight(BlockAndTintGetter blockAndTintGetter, Fluid fluid, BlockPos blockPos) {
@@ -407,7 +414,7 @@ public class LiquidRenderer {
     private float getHeight(BlockAndTintGetter blockAndTintGetter, Fluid fluid, BlockPos blockPos, BlockState adjBlockState) {
         FluidState adjFluidState = adjBlockState.getFluidState();
         if (fluid.isSame(adjFluidState.getType())) {
-            BlockState blockState2 = blockAndTintGetter.getBlockState(blockPos.offset(Direction.UP.getNormal()));
+            BlockState blockState2 = blockAndTintGetter.getBlockState(upperBlockPos.set(blockPos).offset(Direction.UP.getNormal()));
             return fluid.isSame(blockState2.getFluidState().getType()) ? 1.0F : adjFluidState.getOwnHeight();
         } else {
             return !adjBlockState.isSolid() ? 0.0F : -1.0f;
@@ -415,7 +422,7 @@ public class LiquidRenderer {
     }
 
     private int calculateNormal(ModelQuad quad) {
-        // TODO
+
         Vector3f normal = new Vector3f(quad.getX(1), quad.getY(1), quad.getZ(1))
                 .cross(quad.getX(3), quad.getY(3), quad.getZ(3));
         normal.normalize();
@@ -426,7 +433,6 @@ public class LiquidRenderer {
     private void putQuad(ModelQuad quad, TerrainBufferBuilder bufferBuilder, float xOffset, float yOffset, float zOffset, boolean flip) {
         QuadLightData quadLightData = resources.quadLightData;
 
-        // Rotate triangles if needed to fix AO anisotropy
         int k = QuadUtils.getIterationStartIdx(quadLightData.br);
 
         bufferBuilder.ensureCapacity();

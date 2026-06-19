@@ -15,10 +15,6 @@ import java.nio.IntBuffer;
 @Mixin(GL14C.class)
 public class GL14M {
 
-    /**
-     * @author
-     * @reason
-     */
     @Overwrite(remap = false)
     public static void glBlendFuncSeparate(@NativeType("GLenum") int sfactorRGB, @NativeType("GLenum") int dfactorRGB, @NativeType("GLenum") int sfactorAlpha, @NativeType("GLenum") int dfactorAlpha) {
         VRenderSystem.blendFuncSeparate(sfactorRGB, dfactorRGB, sfactorAlpha, dfactorAlpha);

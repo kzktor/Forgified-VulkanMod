@@ -12,6 +12,9 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import org.spongepowered.asm.mixin.injection.ModifyVariable;
+import net.vulkanmod.render.model.quad.BakedQuadDeduplicator;
+
 import static net.vulkanmod.render.model.quad.ModelQuad.VERTEX_SIZE;
 
 @Mixin(BakedQuad.class)
@@ -22,9 +25,14 @@ public class BakedQuadM implements QuadView {
     @Shadow @Final protected int tintIndex;
     private int flags;
 
+    @ModifyVariable(method = "<init>", at = @At("HEAD"), argsOnly = true, ordinal = 0)
+    private static int[] modifyVertices(int[] vertices) {
+        return BakedQuadDeduplicator.deduplicateVertices(vertices);
+    }
+
     @Inject(method = "<init>", at = @At("RETURN"))
     private void onInit(int[] vertices, int tintIndex, Direction direction, TextureAtlasSprite textureAtlasSprite, boolean shade, CallbackInfo ci) {
-        this.flags = ModelQuadFlags.getQuadFlags(vertices, direction);
+        this.flags = ModelQuadFlags.getQuadFlags(this.vertices, direction);
     }
 
     @Override

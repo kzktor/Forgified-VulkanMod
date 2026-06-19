@@ -19,12 +19,10 @@ import net.vulkanmod.vulkan.shader.layout.Uniform;
 import net.vulkanmod.vulkan.shader.descriptor.UBO;
 import net.vulkanmod.vulkan.shader.parser.GlslConverter;
 import net.vulkanmod.vulkan.util.MappedBuffer;
-import org.apache.commons.io.IOUtils;
 import org.lwjgl.opengl.GL30;
 import org.lwjgl.system.MemoryUtil;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Overwrite;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -44,7 +42,7 @@ import java.util.Map;
 import java.util.function.IntSupplier;
 import java.util.function.Supplier;
 
-@Mixin(EffectInstance.class)
+@Mixin(value = EffectInstance.class, priority = 900)
 public class EffectInstanceM {
 
     @Shadow @Final private Map<String, com.mojang.blaze3d.shaders.Uniform> uniformMap;
@@ -70,7 +68,7 @@ public class EffectInstanceM {
                     shift = At.Shift.AFTER),
             locals = LocalCapture.CAPTURE_FAILHARD
     )
-    private void inj(ResourceProvider resourceProvider, String string, CallbackInfo ci, ResourceLocation resourceLocation, Resource resource, Reader reader, JsonObject jsonObject, String string2, String string3) {
+    private void inj(ResourceProvider resourceProvider, String string, CallbackInfo ci, ResourceLocation resourceLocation, ResourceLocation resourceLocation2, Resource resource, Reader reader, JsonObject jsonObject, String string2, String string3) {
         createShaders(resourceProvider, string2, string3);
     }
 
@@ -80,19 +78,14 @@ public class EffectInstanceM {
         return null;
     }
 
-    /**
-     * @author
-     * @reason
-     */
-    @Overwrite
-    public void close() {
+    @Inject(method = "close", at = @At("HEAD"), cancellable = true)
+    private void close(CallbackInfo ci) {
+        ci.cancel();
 
         for (com.mojang.blaze3d.shaders.Uniform uniform : this.uniforms) {
             uniform.close();
         }
 
-        //TODO
-//        ProgramManager.releaseProgram(this);
     }
 
     private void createShaders(ResourceProvider resourceManager, String vertexShader, String fragShader) {
@@ -102,15 +95,14 @@ public class EffectInstanceM {
             ResourceLocation vshLocation = ResourceLocation.fromNamespaceAndPath(vshPathInfo[0], "shaders/program/" + vshPathInfo[1] + ".vsh");
             Resource resource = resourceManager.getResourceOrThrow(vshLocation);
             InputStream inputStream = resource.open();
-            String vshSrc = IOUtils.toString(inputStream, StandardCharsets.UTF_8);
+            String vshSrc = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
 
             String[] fshPathInfo = this.decompose(fragShader, ':');
             ResourceLocation fshLocation = ResourceLocation.fromNamespaceAndPath(fshPathInfo[0], "shaders/program/" + fshPathInfo[1] + ".fsh");
             resource = resourceManager.getResourceOrThrow(fshLocation);
             inputStream = resource.open();
-            String fshSrc = IOUtils.toString(inputStream, StandardCharsets.UTF_8);
+            String fshSrc = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
 
-            //TODO
             GlslConverter converter = new GlslConverter();
 
             converter.process(vshSrc, fshSrc);
@@ -133,6 +125,11 @@ public class EffectInstanceM {
 
         for(Uniform v_uniform : ubo.getUniforms()) {
             com.mojang.blaze3d.shaders.Uniform uniform = this.uniformMap.get(v_uniform.getName());
+
+            if (uniform == null) {
+
+                continue;
+            }
 
             Supplier<MappedBuffer> supplier;
             ByteBuffer byteBuffer;
@@ -168,12 +165,10 @@ public class EffectInstanceM {
         return strings;
     }
 
-    /**
-     * @author
-     * @reason
-     */
-    @Overwrite
-    public void apply() {
+    @Inject(method = "apply", at = @At("HEAD"), cancellable = true)
+    private void apply(CallbackInfo ci) {
+        ci.cancel();
+
         this.dirty = false;
         this.blend.apply();
 
@@ -205,12 +200,10 @@ public class EffectInstanceM {
 
     }
 
-    /**
-     * @author
-     * @reason
-     */
-    @Overwrite
-    public void clear() {
+    @Inject(method = "clear", at = @At("HEAD"), cancellable = true)
+    private void clear(CallbackInfo ci) {
+        ci.cancel();
+
         RenderSystem.assertOnRenderThread();
         ProgramManager.glUseProgram(0);
         lastProgramId = -1;

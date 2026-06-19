@@ -3,12 +3,6 @@ package net.vulkanmod.gl;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * One-time diagnostics for tolerated GL emulation gaps. External mods issue GL
- * calls the Vulkan backend has no analog for; those must degrade (no-op or a
- * spec-shaped default) instead of crashing, with a single log line per call
- * site so repeated per-frame calls cannot flood the log.
- */
 public final class GlEmulationLog {
     private static final Set<String> REPORTED = ConcurrentHashMap.newKeySet();
     private static final Set<String> CONTRACT_FAMILIES = Set.of(
@@ -22,8 +16,6 @@ public final class GlEmulationLog {
             "runtime_smoke",
             "performance");
 
-    // Holder defers the log4j dependency so unit tests can exercise the
-    // emulation classes on a classpath without a logging backend.
     private static final class Log {
         static final org.apache.logging.log4j.Logger IMPL =
                 org.apache.logging.log4j.LogManager.getLogger("VulkanMod-GlEmulation");

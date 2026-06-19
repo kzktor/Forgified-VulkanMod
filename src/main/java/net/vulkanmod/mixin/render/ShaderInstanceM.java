@@ -41,9 +41,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Supplier;
 
-// Inject-cancel instead of @Overwrite for close/apply/clear so mods injecting into
-// the vanilla shader lifecycle keep valid targets; priority 900 lets default-priority
-// HEAD observers run before the cancelling callback.
 @Mixin(value = ShaderInstance.class, priority = 900)
 public class ShaderInstanceM implements ShaderMixed {
 
@@ -72,7 +69,6 @@ public class ShaderInstanceM implements ShaderMixed {
     private GraphicsPipeline pipeline;
     private final Map<VertexFormat, GraphicsPipeline> variantPipelines = new HashMap<>();
     boolean isLegacy = false;
-
 
     public GraphicsPipeline getPipeline() {
         return pipeline;
@@ -138,17 +134,12 @@ public class ShaderInstanceM implements ShaderMixed {
             pipelineBuilder.compileShaders();
             this.pipeline = pipelineBuilder.createGraphicsPipeline();
         } catch (Exception e) {
-            // External mods construct ShaderInstances we cannot anticipate (e.g. Veil
-            // program wrappers with synthetic resource providers); never let shader
-            // creation crash the constructor - try GLSL conversion instead.
+
             Initializer.LOGGER.error("Error on shader {} creation, attempting conversion fallback", name, e);
             createLegacyShader(resourceProvider, format);
         }
     }
 
-    // Classpath is the source of truth here: Pipeline.Builder.parseBindingsJSON reads
-    // bundled assets only. Probing the ResourceProvider false-positives with mods whose
-    // synthetic providers answer every location (Veil shader wrappers).
     private static boolean hasVulkanShader(String bindPath) {
         String resourcePath = "/assets/vulkanmod/shaders/%s.json".formatted(bindPath);
         try (InputStream stream = Pipeline.class.getResourceAsStream(resourcePath)) {
@@ -275,7 +266,6 @@ public class ShaderInstanceM implements ShaderMixed {
             } else {
                 throw new RuntimeException("out of bounds value for uniform " + uniform);
             }
-
 
             MappedBuffer mappedBuffer = MappedBuffer.createFromBuffer(byteBuffer);
             supplier = () -> mappedBuffer;

@@ -49,7 +49,6 @@ public class RenderSection {
 
     private final DrawBuffers.DrawParameters[] drawParametersArray;
 
-    // Graph-info
     public byte mainDir;
     public byte directions;
     public byte sourceDirs;
@@ -234,7 +233,6 @@ public class RenderSection {
         return true;
     }
 
-    // TODO: sync rebuild
     public void rebuildChunkSync(TaskDispatcher dispatcher, RenderRegionBuilder renderRegionCache) {
     }
 
@@ -348,30 +346,41 @@ public class RenderSection {
     }
 
     public void updateGlobalBlockEntities(Collection<BlockEntity> fullSet) {
-        if (fullSet.isEmpty())
-            return;
-
-        Set<BlockEntity> set = Sets.newHashSet(fullSet);
-        Set<BlockEntity> set1;
+        Set<BlockEntity> addedBlockEntities = Sets.newHashSet(fullSet);
+        Set<BlockEntity> removedBlockEntities;
         Set<BlockEntity> sectionSet;
         synchronized (globalBlockEntitiesMap) {
-            sectionSet = globalBlockEntitiesMap.computeIfAbsent(this,
-                    (section) -> new ObjectOpenHashSet<>());
+            sectionSet = globalBlockEntitiesMap.get(this);
+            if (sectionSet == null) {
+                if (fullSet.isEmpty()) {
+                    return;
+                }
+
+                sectionSet = new ObjectOpenHashSet<>();
+                globalBlockEntitiesMap.put(this, sectionSet);
+            }
         }
 
         if (sectionSet.size() != fullSet.size() || !sectionSet.containsAll(fullSet)) {
-            set1 = Sets.newHashSet(sectionSet);
-            set.removeAll(sectionSet);
-            set1.removeAll(fullSet);
+            removedBlockEntities = Sets.newHashSet(sectionSet);
+            addedBlockEntities.removeAll(sectionSet);
+            removedBlockEntities.removeAll(fullSet);
 
             sectionSet.clear();
             sectionSet.addAll(fullSet);
 
-            Minecraft.getInstance().levelRenderer.updateGlobalBlockEntities(set1, set);
+            if (sectionSet.isEmpty()) {
+                synchronized (globalBlockEntitiesMap) {
+                    globalBlockEntitiesMap.remove(this);
+                }
+            }
+
+            Minecraft.getInstance().levelRenderer.updateGlobalBlockEntities(removedBlockEntities, addedBlockEntities);
         }
     }
 
     private void reset() {
+        this.clearGlobalBlockEntities();
         this.cancelTasks();
         this.compileStatus.compiledSection = CompiledSection.UNCOMPILED;
         this.dirty = true;
@@ -379,6 +388,10 @@ public class RenderSection {
         this.completelyEmpty = true;
 
         this.resetDrawParameters();
+    }
+
+    private void clearGlobalBlockEntities() {
+        this.updateGlobalBlockEntities(Set.of());
     }
 
     private void resetDrawParameters() {

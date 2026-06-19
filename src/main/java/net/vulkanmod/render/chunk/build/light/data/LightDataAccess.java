@@ -13,25 +13,6 @@ import net.vulkanmod.interfaces.VoxelShapeExtended;
 import net.vulkanmod.render.chunk.build.light.LightMode;
 import net.vulkanmod.render.chunk.util.SimpleDirection;
 
-/**
- * The light data cache is used to make accessing the light data and occlusion properties of blocks cheaper. The data
- * for each block is stored as an integer with packed fields in order to work around the lack of value types in Java.
- *
- * This code is not very pretty, but it does perform significantly faster than the vanilla implementation and has
- * good cache locality.
- *
- * Each integer contains the following fields:
- * - BL: World block light, encoded as a 4-bit unsigned integer
- * - SL: World sky light, encoded as a 4-bit unsigned integer
- * - AO: Ambient occlusion, floating point value in the range of 0.0..1.0 encoded as a 12-bit unsigned integer
- * - CO: Corner opacity test, 8-bit flags for each cube corner (used for sub-block AO)
- * - EM: Emissive test, true if block uses emissive lighting
- * - OP: Block opacity test, true if opaque
- * - FO: Full cube opacity test, true if opaque full cube
- * - FC: Full cube test, true if full cube
- *
- * You can use the various static pack/unpack methods to extract these values in a usable format.
- */
 public abstract class LightDataAccess {
     private static final int BL_OFFSET = 0;
     private static final int SL_OFFSET = 4;
@@ -73,16 +54,19 @@ public abstract class LightDataAccess {
         return this.get(pos.getX(), pos.getY(), pos.getZ());
     }
 
-    /**
-     * Returns the light data for the block at the given position. The property fields can then be accessed using
-     * the various unpack methods below.
-     */
     public abstract int get(int x, int y, int z);
 
     protected int compute(int x, int y, int z) {
-        BlockPos pos = this.pos.set(x, y, z);
+        BlockPos.MutableBlockPos pos = this.pos.set(x, y, z);
+        BlockState state;
+        int bl;
+        int sl;
 
-        BlockState state = world.getBlockState(pos);
+        if (this.world instanceof net.vulkanmod.render.chunk.build.RenderRegion region) {
+            state = region.getBlockStateRaw(x, y, z);
+        } else {
+            state = world.getBlockState(pos);
+        }
 
         boolean em = state.emissiveRendering(world, pos);
 
@@ -97,18 +81,19 @@ public abstract class LightDataAccess {
 
         int lu = state.getLightEmission();
 
-        // OPTIMIZE: Do not calculate light data if the block is full and opaque and does not emit light.
-        int bl;
-        int sl;
         if (fo && lu == 0) {
             bl = 0;
             sl = 0;
         } else {
-            bl = world.getBrightness(LightLayer.BLOCK, pos);
-            sl = world.getBrightness(LightLayer.SKY, pos);
+            if (this.world instanceof net.vulkanmod.render.chunk.build.RenderRegion region) {
+                bl = region.getBrightnessRaw(LightLayer.BLOCK, x, y, z);
+                sl = region.getBrightnessRaw(LightLayer.SKY, x, y, z);
+            } else {
+                bl = world.getBrightness(LightLayer.BLOCK, pos);
+                sl = world.getBrightness(LightLayer.SKY, pos);
+            }
         }
 
-        // FIX: Do not apply AO from blocks that emit light
         float ao;
         if (lu == 0) {
             ao = state.getShadeBrightness(world, pos);
@@ -195,15 +180,8 @@ public abstract class LightDataAccess {
         return ((word >>> FC_OFFSET) & 0b1) != 0;
     }
 
-    /**
-     * Computes the combined lightmap using block light, sky light, and luminance values.
-     *
-     * <p>This method's logic is equivalent to
-     * {@link LevelRenderer#getLightColor(BlockAndTintGetter, BlockPos)}, but without the
-     * emissive check.
-     */
     public static int getLightmap(int word) {
-//        return LightTexture.pack(Math.max(unpackBL(word), unpackLU(word)), unpackSL(word));
+
         return LightTexture.pack(unpackBL(word), unpackSL(word));
     }
 
@@ -217,5 +195,9 @@ public abstract class LightDataAccess {
 
     public BlockAndTintGetter getWorld() {
         return this.world;
+    }
+
+    public void clearWorld() {
+        this.world = null;
     }
 }

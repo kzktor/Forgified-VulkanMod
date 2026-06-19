@@ -51,22 +51,26 @@ public class ColorUtil {
 
     public static class RGBA {
         public static int pack(float r, float g, float b, float a) {
-//            int color = floatToInt(r) << 24 | floatToInt(g) << 16 | floatToInt(b) << 8 | floatToInt(a);
+
             int color = floatToInt(a) << 24 | floatToInt(b) << 16 | floatToInt(g) << 8 | floatToInt(r);
 
             return color;
         }
 
         public static float unpackR(int color) {
-            return unpackColor(color, 24);
+            return unpackColor(color, 0);
         }
 
         public static float unpackG(int color) {
-            return unpackColor(color, 16);
+            return unpackColor(color, 8);
         }
 
         public static float unpackB(int color) {
-            return unpackColor(color, 8);
+            return unpackColor(color, 16);
+        }
+
+        public static float unpackA(int color) {
+            return unpackColor(color, 24);
         }
 
         public static int fromArgb32(int i) {

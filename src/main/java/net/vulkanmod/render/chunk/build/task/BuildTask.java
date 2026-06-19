@@ -2,14 +2,19 @@ package net.vulkanmod.render.chunk.build.task;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ItemBlockRenderTypes;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
 import net.minecraft.client.renderer.chunk.VisGraph;
+import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.core.BlockPos;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.neoforge.client.ChunkRenderTypeSet;
+import net.neoforged.neoforge.client.model.data.ModelData;
 import net.vulkanmod.Initializer;
 import net.vulkanmod.render.chunk.RenderSection;
 import net.vulkanmod.render.chunk.WorldRenderer;
@@ -42,34 +47,40 @@ public class BuildTask extends ChunkTask {
         long startTime = System.nanoTime();
 
         if (this.cancelled.get()) {
+            this.clearPayload();
             return Result.CANCELLED;
         }
 
-        Vec3 vec3 = WorldRenderer.getCameraPos();
-        float x = (float) vec3.x;
-        float y = (float) vec3.y;
-        float z = (float) vec3.z;
-        CompileResult compileResult = this.compile(x, y, z, builderResources);
+        try {
+            Vec3 vec3 = WorldRenderer.getCameraPos();
+            float x = (float) vec3.x;
+            float y = (float) vec3.y;
+            float z = (float) vec3.z;
+            CompileResult compileResult = this.compile(x, y, z, builderResources);
 
-        CompiledSection compiledSection = new CompiledSection();
-        compiledSection.blockEntities.addAll(compileResult.blockEntities);
-        compiledSection.transparencyState = compileResult.transparencyState;
-        compiledSection.isCompletelyEmpty = compileResult.renderedLayers.isEmpty();
-        compileResult.compiledSection = compiledSection;
+            CompiledSection compiledSection = new CompiledSection();
+            compiledSection.blockEntities.addAll(compileResult.blockEntities);
+            compiledSection.transparencyState = compileResult.transparencyState;
+            compiledSection.isCompletelyEmpty = compileResult.renderedLayers.isEmpty();
+            compileResult.compiledSection = compiledSection;
 
-        if (this.cancelled.get()) {
-            compileResult.renderedLayers.values().forEach(UploadBuffer::release);
-            return Result.CANCELLED;
+            if (this.cancelled.get()) {
+                compileResult.releaseBuffers();
+                return Result.CANCELLED;
+            }
+
+            taskDispatcher.scheduleSectionUpdate(compileResult);
+
+            float buildTime = (System.nanoTime() - startTime) * 0.000001f;
+            if (BENCH) {
+                builderResources.updateBuildStats((int) buildTime);
+            }
+
+            return Result.SUCCESSFUL;
+        } finally {
+            this.clearPayload();
+            builderResources.clearRegion();
         }
-
-        taskDispatcher.scheduleSectionUpdate(compileResult);
-
-        float buildTime = (System.nanoTime() - startTime) * 0.000001f;
-        if (BENCH) {
-            builderResources.updateBuildStats((int) buildTime);
-        }
-
-        return Result.SUCCESSFUL;
     }
 
     private CompileResult compile(float camX, float camY, float camZ, BuilderResources builderResources) {
@@ -128,13 +139,21 @@ public class BuildTask extends ChunkTask {
                     }
 
                     if (blockState.getRenderShape() == RenderShape.MODEL) {
-                        renderType = TerrainRenderType.get(ItemBlockRenderTypes.getChunkRenderType(blockState));
+                        BakedModel model = Minecraft.getInstance().getBlockRenderer().getBlockModel(blockState);
+                        ModelData modelData = getModelData(blockPos, blockState, model);
+                        RandomSource randomSource = RandomSource.create();
+                        randomSource.setSeed(blockState.getSeed(blockPos));
+                        ChunkRenderTypeSet renderTypes = model.getRenderTypes(blockState, randomSource, modelData);
 
-                        bufferBuilder = getBufferBuilder(bufferBuilders, renderType);
-                        bufferBuilder.setBlockAttributes(blockState);
+                        for (RenderType chunkRenderType : renderTypes) {
+                            renderType = TerrainRenderType.get(chunkRenderType);
 
-                        pos.set(blockPos.getX() & 15, blockPos.getY() & 15, blockPos.getZ() & 15);
-                        blockRenderer.renderBlock(blockState, blockPos, pos, bufferBuilder);
+                            bufferBuilder = getBufferBuilder(bufferBuilders, renderType);
+                            bufferBuilder.setBlockAttributes(blockState);
+
+                            pos.set(blockPos.getX() & 15, blockPos.getY() & 15, blockPos.getZ() & 15);
+                            blockRenderer.renderBlock(blockState, blockPos, pos, bufferBuilder, model, modelData, chunkRenderType);
+                        }
                     }
                 }
             }
@@ -157,8 +176,24 @@ public class BuildTask extends ChunkTask {
         }
 
         compileResult.visibilitySet = visGraph.resolve();
-        this.region = null;
         return compileResult;
+    }
+
+    @Override
+    protected void clearPayload() {
+        this.region = null;
+    }
+
+    private ModelData getModelData(BlockPos blockPos, BlockState blockState, BakedModel model) {
+        ModelData modelData = ModelData.EMPTY;
+        if (blockState.hasBlockEntity() && this.region != null) {
+            BlockEntity blockEntity = this.region.getBlockEntity(blockPos);
+            if (blockEntity != null) {
+                modelData = blockEntity.getModelData();
+            }
+        }
+
+        return model.getModelData(this.region, blockPos, blockState, modelData);
     }
 
     private void setupBufferBuilders(ThreadBuilderPack builderPack) {

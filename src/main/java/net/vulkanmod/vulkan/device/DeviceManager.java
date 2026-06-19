@@ -108,14 +108,27 @@ public abstract class DeviceManager {
 
             physicalDevice = DeviceManager.device.physicalDevice;
 
-            // Get device properties
             deviceProperties = device.properties;
 
             memoryProperties = VkPhysicalDeviceMemoryProperties.malloc();
             vkGetPhysicalDeviceMemoryProperties(physicalDevice, memoryProperties);
 
             surfaceProperties = querySurfaceProperties(physicalDevice, stack);
+
+            Initializer.LOGGER.info(
+                    "Selected Vulkan device: {} ({}) driver {} Vulkan {} indirectDrawSupported={} fastIndirectDraw={}",
+                    device.deviceName,
+                    device.vendorIdString,
+                    device.driverVersion,
+                    device.vkVersion,
+                    device.isDrawIndirectSupported(),
+                    supportsFastIndirectDraw()
+            );
         }
+    }
+
+    public static boolean supportsFastIndirectDraw() {
+        return device != null && device.isDrawIndirectSupported() && !device.isIntel();
     }
 
     static Device autoPickDevice() {
@@ -175,10 +188,9 @@ public abstract class DeviceManager {
             deviceFeatures.sType$Default();
             deviceFeatures.features().samplerAnisotropy(device.availableFeatures.features().samplerAnisotropy());
             deviceFeatures.features().logicOp(device.availableFeatures.features().logicOp());
-            // TODO: Disable indirect draw option if unsupported.
+
             deviceFeatures.features().multiDrawIndirect(device.isDrawIndirectSupported());
 
-            // Must not set line width to anything other than 1.0 if this is not supported
             if (device.availableFeatures.features().wideLines()) {
                 deviceFeatures.features().wideLines(true);
                 VRenderSystem.canSetLineWidth = true;
@@ -198,20 +210,9 @@ public abstract class DeviceManager {
 
                 deviceVulkan11Features.pNext(dynamicRenderingFeaturesKHR.address());
 
-//                //Vulkan 1.3 dynamic rendering
-//                VkPhysicalDeviceVulkan13Features deviceVulkan13Features = VkPhysicalDeviceVulkan13Features.calloc(stack);
-//                deviceVulkan13Features.sType$Default();
-//                if(!deviceInfo.availableFeatures13.dynamicRendering())
-//                    throw new RuntimeException("Device does not support dynamic rendering feature.");
-//
-//                deviceVulkan13Features.dynamicRendering(true);
-//                createInfo.pNext(deviceVulkan13Features);
-//                deviceVulkan13Features.pNext(deviceVulkan11Features.address());
             }
 
             createInfo.ppEnabledExtensionNames(asPointerBuffer(Vulkan.REQUIRED_EXTENSION));
-
-//            Configuration.DEBUG_FUNCTIONS.set(true);
 
             createInfo.ppEnabledLayerNames(Vulkan.ENABLE_VALIDATION_LAYERS ? asPointerBuffer(Vulkan.VALIDATION_LAYERS) : null);
 
@@ -241,7 +242,6 @@ public abstract class DeviceManager {
             extensions.put(glfwExtensions);
             extensions.put(stack.UTF8(VK_EXT_DEBUG_UTILS_EXTENSION_NAME));
 
-            // Rewind the buffer before returning it to reset its position back to 0
             return extensions.rewind();
         }
 
@@ -283,8 +283,6 @@ public abstract class DeviceManager {
         return availableExtensions;
     }
 
-    // Use the optimal most performant depth format for the specific GPU
-    // Nvidia performs best with 24 bit depth, while AMD is most performant with 32-bit float
     public static int findDepthFormat(boolean use24BitsDepthFormat) {
         int[] formats = use24BitsDepthFormat ? new int[]
                 {VK_FORMAT_D24_UNORM_S8_UINT, VK_FORMAT_X8_D24_UNORM_PACK32, VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT}

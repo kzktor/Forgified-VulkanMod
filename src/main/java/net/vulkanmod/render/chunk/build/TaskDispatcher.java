@@ -1,22 +1,24 @@
 package net.vulkanmod.render.chunk.build;
 
 import com.google.common.collect.Queues;
+import net.vulkanmod.Initializer;
 import net.vulkanmod.render.chunk.ChunkArea;
-import net.vulkanmod.render.chunk.ChunkAreaManager;
 import net.vulkanmod.render.chunk.RenderSection;
-import net.vulkanmod.render.chunk.WorldRenderer;
 import net.vulkanmod.render.chunk.buffer.DrawBuffers;
 import net.vulkanmod.render.chunk.build.task.ChunkTask;
 import net.vulkanmod.render.chunk.build.task.CompileResult;
 import net.vulkanmod.render.chunk.build.thread.ThreadBuilderPack;
 import net.vulkanmod.render.chunk.build.thread.BuilderResources;
+import net.vulkanmod.render.optimization.AdaptiveChunkUploadBudget;
 import net.vulkanmod.render.vertex.TerrainRenderType;
 
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Queue;
+import java.util.concurrent.locks.LockSupport;
 
 public class TaskDispatcher {
+    private static final int MAX_PENDING_COMPILE_RESULTS = 128;
     private final Queue<CompileResult> compileResults = Queues.newLinkedBlockingDeque();
     public final ThreadBuilderPack fixedBuffers;
 
@@ -46,9 +48,7 @@ public class TaskDispatcher {
         this.stopThreads = false;
 
         if(this.resources != null) {
-            for (BuilderResources resources : this.resources) {
-                resources.clear();
-            }
+            closeResources(this.resources);
         }
 
         this.threads = new Thread[n];
@@ -58,7 +58,7 @@ public class TaskDispatcher {
             BuilderResources builderResources = new BuilderResources();
             Thread thread = new Thread(() -> runTaskThread(builderResources),
                     "Builder-" + i);
-            thread.setPriority(Thread.NORM_PRIORITY);
+            thread.setPriority(Thread.MIN_PRIORITY);
 
             this.threads[i] = thread;
             this.resources[i] = builderResources;
@@ -84,6 +84,7 @@ public class TaskDispatcher {
             if(task == null)
                 continue;
 
+            task.markStarted();
             task.runTask(builderResources);
         }
     }
@@ -131,32 +132,83 @@ public class TaskDispatcher {
             }
         }
 
+        this.clearBatchQueue();
+        closeResources(this.resources);
+        this.fixedBuffers.closeAll();
+        this.resources = null;
+        this.threads = null;
+
+    }
+
+    private static void closeResources(BuilderResources[] resourcesArray) {
+        if (resourcesArray == null) {
+            return;
+        }
+
+        for (BuilderResources resources : resourcesArray) {
+            if (resources != null) {
+                resources.close();
+            }
+        }
     }
 
     public boolean updateSections() {
         CompileResult result;
         boolean flag = false;
-        while((result = this.compileResults.poll()) != null) {
+        int uploadsThisFrame = 0;
+        int maxUploadsPerFrame = this.getMaxUploadsPerFrame();
+        int pendingUploads = this.compileResults.size();
+        long uploadStartNanos = System.nanoTime();
+        long uploadTimeBudgetNanos = Initializer.CONFIG.adaptiveChunkUploads
+                ? AdaptiveChunkUploadBudget.uploadTimeBudgetNanos(pendingUploads)
+                : Long.MAX_VALUE;
+
+        while(uploadsThisFrame < maxUploadsPerFrame && (result = this.compileResults.poll()) != null) {
             flag = true;
             doSectionUpdate(result);
+            uploadsThisFrame++;
+
+            if (uploadsThisFrame > 0 && System.nanoTime() - uploadStartNanos >= uploadTimeBudgetNanos) {
+                break;
+            }
         }
 
         return flag;
     }
 
+    private int getMaxUploadsPerFrame() {
+        int configuredUploads = Initializer.CONFIG.chunkUploadsPerFrame;
+        return Initializer.CONFIG.adaptiveChunkUploads
+                ? AdaptiveChunkUploadBudget.chooseBudget(configuredUploads, this.compileResults.size())
+                : clampMaxUploadsPerFrame(configuredUploads);
+    }
+
+    public static int clampMaxUploadsPerFrame(int uploadsPerFrame) {
+        return Math.max(1, Math.min(16, uploadsPerFrame));
+    }
+
     public void scheduleSectionUpdate(CompileResult compileResult) {
+        while (!this.stopThreads && this.compileResults.size() >= MAX_PENDING_COMPILE_RESULTS) {
+            LockSupport.parkNanos(1_000_000L);
+        }
+
+        if (this.stopThreads) {
+            compileResult.releaseBuffers();
+            return;
+        }
+
         this.compileResults.add(compileResult);
     }
 
     private void doSectionUpdate(CompileResult compileResult) {
+        if (!compileResult.matchesCurrentSection()) {
+            compileResult.releaseBuffers();
+            return;
+        }
+
         RenderSection section = compileResult.renderSection;
         ChunkArea renderArea = section.getChunkArea();
         DrawBuffers drawBuffers = renderArea.getDrawBuffers();
-
-        // Check if area has been dismissed before uploading
-        ChunkAreaManager chunkAreaManager = WorldRenderer.getInstance().getChunkAreaManager();
-        if (chunkAreaManager.getChunkArea(renderArea.index) != renderArea)
-            return;
 
         if(compileResult.fullUpdate) {
             var renderLayers = compileResult.renderedLayers;
@@ -184,21 +236,26 @@ public class TaskDispatcher {
         while(!this.highPriorityTasks.isEmpty()) {
             ChunkTask chunkTask = this.highPriorityTasks.poll();
             if (chunkTask != null) {
-                chunkTask.cancel();
+                chunkTask.discard();
             }
         }
 
         while(!this.lowPriorityTasks.isEmpty()) {
             ChunkTask chunkTask = this.lowPriorityTasks.poll();
             if (chunkTask != null) {
-                chunkTask.cancel();
+                chunkTask.discard();
             }
+        }
+
+        CompileResult compileResult;
+        while ((compileResult = this.compileResults.poll()) != null) {
+            compileResult.releaseBuffers();
         }
     }
 
     public String getStats() {
         int taskCount = highPriorityTasks.size() + lowPriorityTasks.size();
-        return String.format("iT: %d Ts: %d", this.idleThreads, taskCount);
+        return String.format("iT: %d Ts: %d uQ: %d", this.idleThreads, taskCount, this.compileResults.size());
     }
 
     public BuilderResources[] getResourcesArray() {

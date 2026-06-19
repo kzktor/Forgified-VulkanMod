@@ -31,8 +31,6 @@ public class GlTexture {
         texture.setVulkanImageReference(vulkanImage);
     }
 
-    // Real GL treats binding an ungenerated name as creating that texture
-    // object; mods managing their own id ranges rely on it.
     private static GlTexture getOrCreate(int id) {
         GlTexture texture = map.get(id);
         if (texture == null) {
@@ -78,8 +76,6 @@ public class GlTexture {
         if (image != null)
             MemoryManager.getInstance().addToFreeable(image);
 
-        // Deleting the bound texture unbinds it (GL semantics); a stale
-        // reference here would upload into a freed Vulkan image.
         if (glTexture != null && glTexture == boundTexture) {
             boundTexture = null;
             boundTextureId = 0;
@@ -146,9 +142,8 @@ public class GlTexture {
         if (width == 0 || height == 0)
             return true;
 
-        // TODO: levels
         if (level != 0) {
-//            throw new UnsupportedOperationException();
+
             return true;
         }
         return false;
@@ -235,12 +230,6 @@ public class GlTexture {
                 "Compressed texture format 0x{} is not decoded yet; recording texture metadata only", Integer.toHexString(internalFormat));
     }
 
-    /**
-     * Compressed upload with data: decode BC/S3TC to RGBA on the CPU and upload through the
-     * proven uncompressed path so the texture actually renders. Falls back to the metadata-only
-     * path above for unsupported formats, missing data, or any decode failure — so the result is
-     * never worse than the previous blank-texture behavior.
-     */
     public static void compressedTexImage2D(int target, int level, int internalFormat, int width, int height, int border, ByteBuffer data) {
         if (target == GL11.GL_TEXTURE_2D && level == 0 && data != null
                 && CompressedTextureDecoder.isSupported(internalFormat)) {
@@ -352,7 +341,6 @@ public class GlTexture {
             default -> {}
         }
 
-        //TODO
     }
 
     public static int getTexParameteri(int target, int pName) {
@@ -409,8 +397,7 @@ public class GlTexture {
         GlBuffer buffer = GlBuffer.getPixelPackBufferBound();
         long ptr;
         if (buffer != null) {
-            // With a pack buffer bound, pixels is an offset into it; an
-            // unallocated pack buffer leaves nowhere to write.
+
             if (buffer.data == null) {
                 GlEmulationLog.warnOnce("getTexImage.emptyPbo", "glGetTexImage into an unallocated pixel pack buffer; readback skipped");
                 return;
@@ -422,7 +409,6 @@ public class GlTexture {
         } else {
             ptr = pixels;
         }
-
 
         ImageUtil.downloadTexture(image, ptr);
     }
@@ -644,7 +630,7 @@ public class GlTexture {
     }
 
     void generateMipmaps() {
-        //TODO test
+
         ImageUtil.generateMipmaps(vulkanImage);
     }
 

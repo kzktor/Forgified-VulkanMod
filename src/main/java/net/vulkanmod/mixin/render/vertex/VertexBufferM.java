@@ -7,13 +7,12 @@ import net.minecraft.client.renderer.ShaderInstance;
 import net.vulkanmod.render.VBO;
 import org.joml.Matrix4f;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Overwrite;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Mixin(VertexBuffer.class)
+@Mixin(value = VertexBuffer.class, priority = 900)
 public class VertexBufferM {
 
     private VBO vbo;
@@ -33,55 +32,43 @@ public class VertexBufferM {
         return 0;
     }
 
-    /**
-     * @author
-     */
-    @Overwrite
-    public void bind() {}
+    @Inject(method = "bind", at = @At("HEAD"), cancellable = true)
+    private void bind(CallbackInfo ci) {
+        ci.cancel();
+    }
 
-    /**
-     * @author
-     */
-    @Overwrite
-    public static void unbind() {}
+    @Inject(method = "unbind", at = @At("HEAD"), cancellable = true)
+    private static void unbind(CallbackInfo ci) {
+        ci.cancel();
+    }
 
-    /**
-     * @author
-     */
-    @Overwrite
-    public void upload(MeshData meshData) {
+    @Inject(method = "upload", at = @At("HEAD"), cancellable = true)
+    private void upload(MeshData meshData, CallbackInfo ci) {
         vbo.upload(meshData);
+        ci.cancel();
     }
 
-    /**
-     * @author
-     */
-    @Overwrite
-    public void uploadIndexBuffer(ByteBufferBuilder.Result result) {
+    @Inject(method = "uploadIndexBuffer(Lcom/mojang/blaze3d/vertex/ByteBufferBuilder$Result;)V", at = @At("HEAD"), cancellable = true)
+    private void uploadIndexBuffer(ByteBufferBuilder.Result result, CallbackInfo ci) {
         vbo.uploadIndexBuffer(result.byteBuffer());
+        ci.cancel();
     }
 
-    /**
-     * @author
-     */
-    @Overwrite
-    public void drawWithShader(Matrix4f viewMatrix, Matrix4f projectionMatrix, ShaderInstance shader) {
+    @Inject(method = "drawWithShader(Lorg/joml/Matrix4f;Lorg/joml/Matrix4f;Lnet/minecraft/client/renderer/ShaderInstance;)V", at = @At("HEAD"), cancellable = true)
+    private void drawWithShader(Matrix4f viewMatrix, Matrix4f projectionMatrix, ShaderInstance shader, CallbackInfo ci) {
         vbo.drawWithShader(viewMatrix, projectionMatrix, shader);
+        ci.cancel();
     }
 
-    /**
-     * @author
-     */
-    @Overwrite
-    public void draw() {
+    @Inject(method = "draw", at = @At("HEAD"), cancellable = true)
+    private void draw(CallbackInfo ci) {
         vbo.draw();
+        ci.cancel();
     }
 
-    /**
-     * @author
-     */
-    @Overwrite
-    public void close() {
+    @Inject(method = "close", at = @At("HEAD"), cancellable = true)
+    private void close(CallbackInfo ci) {
         vbo.close();
+        ci.cancel();
     }
 }

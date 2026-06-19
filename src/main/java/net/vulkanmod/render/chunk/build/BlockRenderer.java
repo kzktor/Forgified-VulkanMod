@@ -3,6 +3,7 @@ package net.vulkanmod.render.chunk.build;
 import it.unimi.dsi.fastutil.objects.Object2ByteLinkedOpenHashMap;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.color.block.BlockColors;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.core.BlockPos;
@@ -11,11 +12,14 @@ import net.minecraft.core.Vec3i;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.BooleanOp;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
+import net.neoforged.neoforge.client.model.data.ModelData;
+import net.neoforged.neoforge.common.util.TriState;
 import net.vulkanmod.render.chunk.build.light.LightPipeline;
 import net.vulkanmod.render.chunk.build.light.data.QuadLightData;
 import net.vulkanmod.render.chunk.build.thread.BuilderResources;
@@ -60,31 +64,33 @@ public class BlockRenderer {
         BlockRenderer.blockColors = blockColors;
     }
 
-    public void renderBlock(BlockState blockState, BlockPos blockPos, Vector3f pos, TerrainBufferBuilder bufferBuilder) {
+    public void renderBlock(BlockState blockState, BlockPos blockPos, Vector3f pos, TerrainBufferBuilder bufferBuilder,
+                            BakedModel model, ModelData modelData, RenderType renderType) {
         this.pos = pos;
         this.blockPos = blockPos;
         this.blockState = blockState;
 
         long seed = blockState.getSeed(blockPos);
 
-        BakedModel model = Minecraft.getInstance().getBlockRenderer().getBlockModel(blockState);
-        tessellateBlock(model, bufferBuilder, seed);
+        tessellateBlock(model, modelData, renderType, bufferBuilder, seed);
     }
 
-    public void tessellateBlock(BakedModel bakedModel, TerrainBufferBuilder bufferBuilder, long seed) {
+    public void tessellateBlock(BakedModel bakedModel, ModelData modelData, RenderType renderType,
+                                TerrainBufferBuilder bufferBuilder, long seed) {
         Vec3 offset = blockState.getOffset(resources.region, blockPos);
 
         pos.add((float) offset.x, (float) offset.y, (float) offset.z);
 
-        boolean useAO = Minecraft.useAmbientOcclusion() && blockState.getLightEmission() == 0 && bakedModel.useAmbientOcclusion();
+        TriState ambientOcclusion = bakedModel.useAmbientOcclusion(blockState, modelData, renderType);
+        boolean modelUsesAO = ambientOcclusion.isDefault() ? bakedModel.useAmbientOcclusion() : ambientOcclusion.isTrue();
+        boolean useAO = Minecraft.useAmbientOcclusion() && blockState.getLightEmission() == 0 && modelUsesAO;
         LightPipeline lightPipeline = useAO ? resources.smoothLightPipeline : resources.flatLightPipeline;
 
-        //noinspection ForLoopReplaceableByForEach
         for (int i = 0; i < DIRECTIONS.length; ++i) {
             Direction direction = DIRECTIONS[i];
 
             randomSource.setSeed(seed);
-            List<BakedQuad> quads = bakedModel.getQuads(blockState, direction, randomSource);
+            List<BakedQuad> quads = bakedModel.getQuads(blockState, direction, randomSource, modelData, renderType);
 
             if (!quads.isEmpty()) {
                 mutableBlockPos.setWithOffset(blockPos, direction);
@@ -95,7 +101,7 @@ public class BlockRenderer {
         }
 
         randomSource.setSeed(seed);
-        List<BakedQuad> quads = bakedModel.getQuads(blockState, null, randomSource);
+        List<BakedQuad> quads = bakedModel.getQuads(blockState, null, randomSource, modelData, renderType);
         if (!quads.isEmpty()) {
             renderModelFace(bufferBuilder, quads, lightPipeline, null);
         }
@@ -135,7 +141,6 @@ public class BlockRenderer {
         float[] brightnessArr = quadLightData.br;
         int[] lights = quadLightData.lm;
 
-        // Rotate triangles if needed to fix AO anisotropy
         int idx = QuadUtils.getIterationStartIdx(brightnessArr, lights);
 
         bufferBuilder.ensureCapacity();
@@ -173,6 +178,12 @@ public class BlockRenderer {
     public boolean shouldRenderFace(BlockState blockState, Direction direction, BlockPos adjPos) {
         BlockGetter blockGetter = resources.region;
         BlockState adjBlockState = blockGetter.getBlockState(adjPos);
+
+        if (net.vulkanmod.Initializer.CONFIG.leavesCulling) {
+            if (blockState.getBlock() instanceof LeavesBlock && adjBlockState.getBlock() instanceof LeavesBlock) {
+                return false;
+            }
+        }
 
         if (blockState.skipRendering(adjBlockState, direction)) {
             return false;

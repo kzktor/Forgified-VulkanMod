@@ -19,11 +19,6 @@ public abstract class MipmapGeneratorM {
         return 0;
     }
 
-    /**
-     * @author
-     * @reason Add an average background color to texture that have transparent backgrounds
-     * to fix mipmaps artifacts
-     */
     @SuppressWarnings("UnreachableCode")
     @Overwrite
     public static NativeImage[] generateMipLevels(NativeImage[] nativeImages, int i) {
@@ -38,7 +33,7 @@ public abstract class MipmapGeneratorM {
 
             if (bl) {
                 int avg = calculateAverage(nativeImages2[0]);
-                avg = avg & 0x00FFFFFF; //mask out alpha
+                avg = avg & 0x00FFFFFF;
 
                 NativeImage nativeImage = nativeImages2[0];
                 int width = nativeImage.getWidth();
@@ -64,20 +59,25 @@ public abstract class MipmapGeneratorM {
                     nativeImages2[j] = nativeImages[j];
                 } else {
                     NativeImage nativeImage = nativeImages2[j - 1];
-                    NativeImage nativeImage2 = new NativeImage(nativeImage.getWidth() >> 1, nativeImage.getHeight() >> 1, false);
+                    int previousWidth = nativeImage.getWidth();
+                    int previousHeight = nativeImage.getHeight();
+                    NativeImage nativeImage2 = new NativeImage(Math.max(1, previousWidth >> 1), Math.max(1, previousHeight >> 1), false);
                     int width = nativeImage2.getWidth();
                     int height = nativeImage2.getHeight();
 
                     srcPtr = ((NativeImageAccessor)(Object)nativeImage).getPixels();
                     long dstPtr = ((NativeImageAccessor)(Object)nativeImage2).getPixels();
-                    final int width2 = width * 2;
 
                     for(int m = 0; m < width; ++m) {
                         for(int n = 0; n < height; ++n) {
-                            int p0 = MemoryUtil.memGetInt(srcPtr + ((m * 2 + 0) + ((n * 2 + 0) * width2)) * 4L);
-                            int p1 = MemoryUtil.memGetInt(srcPtr + ((m * 2 + 1) + ((n * 2 + 0) * width2)) * 4L);
-                            int p2 = MemoryUtil.memGetInt(srcPtr + ((m * 2 + 0) + ((n * 2 + 1) * width2)) * 4L);
-                            int p3 = MemoryUtil.memGetInt(srcPtr + ((m * 2 + 1) + ((n * 2 + 1) * width2)) * 4L);
+                            int srcX0 = Math.min(m * 2, previousWidth - 1);
+                            int srcX1 = Math.min(m * 2 + 1, previousWidth - 1);
+                            int srcY0 = Math.min(n * 2, previousHeight - 1);
+                            int srcY1 = Math.min(n * 2 + 1, previousHeight - 1);
+                            int p0 = MemoryUtil.memGetInt(srcPtr + (srcX0 + ((long) srcY0 * previousWidth)) * 4L);
+                            int p1 = MemoryUtil.memGetInt(srcPtr + (srcX1 + ((long) srcY0 * previousWidth)) * 4L);
+                            int p2 = MemoryUtil.memGetInt(srcPtr + (srcX0 + ((long) srcY1 * previousWidth)) * 4L);
+                            int p3 = MemoryUtil.memGetInt(srcPtr + (srcX1 + ((long) srcY1 * previousWidth)) * 4L);
 
                             int outColor = blend(p0, p1, p2, p3);
                             MemoryUtil.memPutInt(dstPtr + (m + (long) n * width) * 4L, outColor);
@@ -106,7 +106,7 @@ public abstract class MipmapGeneratorM {
 
     private static int blend(int p0, int p1, int p2, int p3) {
         int a = gammaBlend(p0, p1, p2, p3, 24);
-//        int a = ((p0 >> 24 & 0xFF) + (p1 >> 24 & 0xFF) + (p2 >> 24 & 0xFF) + (p3 >> 24 & 0xFF)) >> 2;
+
         int b = gammaBlend(p0, p1, p2, p3, 16);
         int g = gammaBlend(p0, p1, p2, p3, 8);
         int r = gammaBlend(p0, p1, p2, p3, 0);
@@ -141,7 +141,7 @@ public abstract class MipmapGeneratorM {
 
         for(int i = 0; i < width; ++i) {
             for(int j = 0; j < height; ++j) {
-//                int value = nativeImage.getPixelRGBA(i, j);
+
                 int value = MemoryUtil.memGetInt(srcPtr + (i + (long) j * width) * 4L);
                 if (((value >> 24) & 0xFF) > 0) {
                     values[count] = value;

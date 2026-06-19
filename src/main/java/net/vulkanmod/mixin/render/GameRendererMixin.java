@@ -7,27 +7,27 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.datafixers.util.Pair;
-import net.fabricmc.fabric.api.client.rendering.v1.CoreShaderRegistrationCallback;
-import net.fabricmc.fabric.impl.client.rendering.FabricShaderProgram;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.server.packs.resources.ResourceProvider;
+import net.neoforged.fml.ModLoader;
+import net.neoforged.neoforge.client.event.RegisterShadersEvent;
 import net.vulkanmod.vulkan.memory.MemoryManager;
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Overwrite;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
-@Mixin(GameRenderer.class)
+@Mixin(value = GameRenderer.class, priority = 900)
 public abstract class GameRendererMixin {
 
     @Shadow @Final private Map<String, ShaderInstance> shaders;
@@ -120,10 +120,6 @@ public abstract class GameRendererMixin {
                             positionColor,
                             (shaderInstance) -> positionColorShader = shaderInstance));
 
-            // These aren't used
-//            pairs.add(
-//                    Pair.of(new ShaderInstance(provider, "position_color_lightmap", DefaultVertexFormat.POSITION_COLOR_LIGHTMAP),
-//                            (shaderInstance) -> positionColorLightmapShader = shaderInstance));
             pairs.add(
                     Pair.of(new ShaderInstance(provider, "position_color_tex_lightmap", DefaultVertexFormat.POSITION_COLOR_TEX_LIGHTMAP),
                             (shaderInstance) -> positionColorTexLightmapShader = shaderInstance));
@@ -134,9 +130,7 @@ public abstract class GameRendererMixin {
             pairs.add(
                     Pair.of(new ShaderInstance(provider, "position_tex_color", DefaultVertexFormat.POSITION_TEX_COLOR),
                             (shaderInstance) -> positionTexColorShader = shaderInstance));
-//            pairs.add(
-//                    Pair.of(new ShaderInstance(provider, "position_tex_lightmap_color", DefaultVertexFormat.POSITION_TEX_LIGHTMAP_COLOR),
-//                            (shaderInstance) -> positionTexLightmapColorShader = shaderInstance));
+
             pairs.add(
                     Pair.of(new ShaderInstance(provider, "rendertype_solid", DefaultVertexFormat.BLOCK),
                             (shaderInstance) -> rendertypeSolidShader = shaderInstance));
@@ -162,7 +156,6 @@ public abstract class GameRendererMixin {
                     Pair.of(new ShaderInstance(provider, "rendertype_entity_cutout", DefaultVertexFormat.NEW_ENTITY),
                             (shaderInstance) -> rendertypeEntityCutoutShader = shaderInstance));
 
-            // No diff in these shaders
             ShaderInstance entity_no_cull = new ShaderInstance(provider, "rendertype_entity_cutout_no_cull", DefaultVertexFormat.NEW_ENTITY);
             pairs.add(
                     Pair.of(entity_no_cull,
@@ -216,9 +209,7 @@ public abstract class GameRendererMixin {
             pairs.add(
                     Pair.of(new ShaderInstance(provider, "rendertype_outline", DefaultVertexFormat.POSITION_TEX_COLOR),
                     (shaderInstance) -> rendertypeOutlineShader = shaderInstance));
-//            pairs.add(Pair.of(new ShaderInstance(provider, "rendertype_armor_glint", DefaultVertexFormat.POSITION_TEX), (shaderInstance) -> {
-//                rendertypeArmorGlintShader = shaderInstance;
-//            }));
+
             pairs.add(
                     Pair.of(new ShaderInstance(provider, "rendertype_armor_entity_glint", DefaultVertexFormat.POSITION_TEX),
                     (shaderInstance) -> rendertypeArmorEntityGlintShader = shaderInstance));
@@ -228,9 +219,7 @@ public abstract class GameRendererMixin {
             pairs.add(
                     Pair.of(new ShaderInstance(provider, "rendertype_glint", DefaultVertexFormat.POSITION_TEX),
                     (shaderInstance) -> rendertypeGlintShader = shaderInstance));
-//            pairs.add(Pair.of(new ShaderInstance(provider, "rendertype_glint_direct", DefaultVertexFormat.POSITION_TEX), (shaderInstance) -> {
-//                rendertypeGlintDirectShader = shaderInstance;
-//            }));
+
             pairs.add(
                     Pair.of(new ShaderInstance(provider, "rendertype_entity_glint", DefaultVertexFormat.POSITION_TEX),
                     (shaderInstance) -> rendertypeEntityGlintShader = shaderInstance));
@@ -238,7 +227,6 @@ public abstract class GameRendererMixin {
                     Pair.of(new ShaderInstance(provider, "rendertype_entity_glint_direct", DefaultVertexFormat.POSITION_TEX),
                     (shaderInstance) -> rendertypeEntityGlintDirectShader = shaderInstance));
 
-            //Text
             pairs.add(
                     Pair.of(new ShaderInstance(provider, "rendertype_text", DefaultVertexFormat.POSITION_COLOR_TEX_LIGHTMAP),
                     (shaderInstance) -> rendertypeTextShader = shaderInstance));
@@ -297,20 +285,14 @@ public abstract class GameRendererMixin {
                     Pair.of(new ShaderInstance(provider, "rendertype_energy_swirl", DefaultVertexFormat.NEW_ENTITY),
                     (shaderInstance) -> rendertypeBreezeWindShader = shaderInstance));
 
-            // FRAPI shader loading
-            CoreShaderRegistrationCallback.RegistrationContext context = (id, vertexFormat, loadCallback) -> {
-                ShaderInstance program = new FabricShaderProgram(provider, id, vertexFormat);
-                pairs.add(Pair.of(program, loadCallback));
-            };
-            CoreShaderRegistrationCallback.EVENT.invoker().registerShaders(context);
-
             this.loadBlurEffect(provider);
+            ModLoader.postEvent(new RegisterShadersEvent(provider, pairs));
         } catch (IOException ioexception) {
             pairs.forEach((pair) -> pair.getFirst().close());
             throw new RuntimeException("could not reload shaders", ioexception);
         }
 
-        this.shutdownShaders();
+        this.shutdownShadersDeferred();
         pairs.forEach((pair) -> {
             ShaderInstance shaderinstance = pair.getFirst();
             this.shaders.put(shaderinstance.getName(), shaderinstance);
@@ -320,12 +302,13 @@ public abstract class GameRendererMixin {
         ci.cancel();
     }
 
-    /**
-     * @author
-     * @reason
-     */
-    @Overwrite
-    private void shutdownShaders() {
+    @Inject(method = "shutdownShaders", at = @At("HEAD"), cancellable = true)
+    private void shutdownShaders(CallbackInfo ci) {
+        ci.cancel();
+        this.shutdownShadersDeferred();
+    }
+
+    private void shutdownShadersDeferred() {
         RenderSystem.assertOnRenderThread();
 
         final var clearList = ImmutableList.copyOf(this.shaders.values());
@@ -334,12 +317,10 @@ public abstract class GameRendererMixin {
         this.shaders.clear();
     }
 
-    /**
-     * @author
-     * @reason
-     */
-    @Overwrite
-    public void preloadUiShader(ResourceProvider resourceProvider) {
+    @Inject(method = "preloadUiShader", at = @At("HEAD"), cancellable = true)
+    private void preloadUiShader(ResourceProvider resourceProvider, CallbackInfo ci) {
+        ci.cancel();
+
         if (this.blitShader != null) {
             throw new RuntimeException("Blit shader already preloaded");
         } else {
@@ -360,14 +341,10 @@ public abstract class GameRendererMixin {
         }
     }
 
-    /**
-     * @author
-     * @reason
-     */
-    @Overwrite
-    public float getDepthFar() {
-//        return this.getRenderDistance() * 4.0F;
-        return Float.POSITIVE_INFINITY;
+    @Inject(method = "getDepthFar", at = @At("HEAD"), cancellable = true)
+    private void getDepthFar(CallbackInfoReturnable<Float> cir) {
+
+        cir.setReturnValue(Float.POSITIVE_INFINITY);
     }
 
 }

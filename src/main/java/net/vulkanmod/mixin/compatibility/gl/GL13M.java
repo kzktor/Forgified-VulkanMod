@@ -23,8 +23,6 @@ public class GL13M {
         GlTexture.activeTexture(texture);
     }
 
-    // BC/S3TC payloads are decoded to RGBA on the CPU and uploaded; unsupported formats fall
-    // back to recording queryable metadata only (see GlTexture.compressedTexImage2D).
     @Overwrite(remap = false)
     public static void glCompressedTexImage2D(@NativeType("GLenum") int target, @NativeType("GLint") int level, @NativeType("GLenum") int internalformat, @NativeType("GLsizei") int width, @NativeType("GLsizei") int height, @NativeType("GLint") int border, @NativeType("void const *") ByteBuffer data) {
         GlTexture.compressedTexImage2D(target, level, internalformat, width, height, border, data);

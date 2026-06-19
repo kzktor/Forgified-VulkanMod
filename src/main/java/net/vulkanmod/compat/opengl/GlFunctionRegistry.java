@@ -44,17 +44,6 @@ import static net.vulkanmod.compat.opengl.GlTrampolines.retI;
 import static net.vulkanmod.compat.opengl.GlTrampolines.retL;
 import static net.vulkanmod.compat.opengl.GlTrampolines.retP;
 
-/**
- * Emulated implementations for every OpenGL entry point the renderer can
- * answer, keyed by C function name. {@link EmulatedGlFunctionProvider} hands
- * the trampoline addresses to LWJGL when GLCapabilities are created, so all
- * direct LWJGL GL calls route here at the C ABI level - independent of which
- * classloader or module layer the caller lives on.
- *
- * Handlers operate on the raw C signatures: LWJGL's Java convenience
- * overloads (Buffer variants, single-id gen/delete helpers) all marshal down
- * to these before dispatch.
- */
 public final class GlFunctionRegistry {
 
     private record Spec(String shape, GlTrampolines.Handler handler) {
@@ -136,13 +125,6 @@ public final class GlFunctionRegistry {
     private static final int GL_OBJECT_ACTIVE_UNIFORM_MAX_LENGTH_ARB = 0x8B87;
     private static final int GL_OBJECT_SHADER_SOURCE_LENGTH_ARB = 0x8B88;
 
-    // GL 3.2 (vanilla's own minimum) is the highest contract the emulation
-    // can honor: per-instance vertex data (GL 3.3 instancing) has no Vulkan
-    // execution path, so advertising 3.3 would steer capability-probing
-    // renderers onto instanced draws that no-op into invisible geometry.
-    // GL 3.3 entry points remain registered and callable regardless; only
-    // the advertised version keeps OpenGL33-gated paths unselected. Matches
-    // GlIntegerState's reported version on the mixin interception path.
     public static final String REPORTED_GL_VERSION = "3.2.0 VulkanMod Compatibility";
 
     static {
@@ -222,7 +204,6 @@ public final class GlFunctionRegistry {
         SPECS.put(name, new Spec(shape, handler));
     }
 
-    /** Present-but-inert entry point: keeps capability checks happy, logs first use. */
     private static void stub(String... names) {
         for (String name : names) {
             SPECS.put(name, new Spec("L:", (ret, args) -> {
@@ -238,8 +219,6 @@ public final class GlFunctionRegistry {
         fn(name, shape, (ret, args) -> {
         });
     }
-
-    // ---------------------------------------------------------------- helpers
 
     private static void genLoop(long args, IntSupplier generator) {
         int n = argI(args, 0);
@@ -516,7 +495,7 @@ public final class GlFunctionRegistry {
             case GL_MAJOR_VERSION -> 3;
             case GL_MINOR_VERSION -> 2;
             case GL_NUM_EXTENSIONS -> 0;
-            case GL_CONTEXT_PROFILE_MASK -> 1; // GL_CONTEXT_CORE_PROFILE_BIT
+            case GL_CONTEXT_PROFILE_MASK -> 1;
             case GL_CONTEXT_FLAGS -> 0;
             default -> GlPixelStore.isPixelStoreParameter(pname)
                     ? GlPixelStore.getInteger(pname)
@@ -541,8 +520,6 @@ public final class GlFunctionRegistry {
             default -> pinnedString("");
         };
     }
-
-    // ------------------------------------------------------------ registration
 
     private static void registerAll() {
         registerGetters();
@@ -1705,12 +1682,9 @@ public final class GlFunctionRegistry {
                 "glMultiTexCoordP3uiv", "glMultiTexCoordP4uiv"}) {
             noop(name, "V:iip");
         }
-        // Divisor 0 (per-vertex data, what non-instanced callers pass) is
-        // exactly a no-op; divisor > 0 cannot be honored, which is why the
-        // reported GL version stays at 3.2 - see REPORTED_GL_VERSION.
+
         noop("glVertexAttribDivisor", "V:ii");
-        // 64-bit attribs (ARB_vertex_attrib_64bit): reached ungated from
-        // legacy vertex-builder fallbacks in shader frameworks.
+
         noop("glVertexAttribLPointer", "V:iiiip");
         noop("glBindFragDataLocationIndexed", "V:iiip");
         fn("glGetFragDataIndex", "I:ip", (ret, args) -> retI(ret, -1));
@@ -1759,9 +1733,6 @@ public final class GlFunctionRegistry {
             noop("glUniformMatrix" + matrix, "V:iibp");
         }
 
-        // Separate-shader-object uniform setters (GL41 / ARB): emulated
-        // programs hold no executable uniforms, absorbed like the bound-
-        // program glUniform* family.
         noop("glProgramUniform1i", "V:iii");
         noop("glProgramUniform2i", "V:iiii");
         noop("glProgramUniform3i", "V:iiiii");

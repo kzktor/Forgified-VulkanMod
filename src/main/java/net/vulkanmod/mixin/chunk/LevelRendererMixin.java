@@ -14,6 +14,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.BlockDestructionProgress;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.phys.Vec3;
+import net.vulkanmod.render.chunk.TerrainRenderState;
 import net.vulkanmod.render.chunk.WorldRenderer;
 import org.joml.Matrix4f;
 import org.spongepowered.asm.mixin.*;
@@ -21,6 +22,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.SortedSet;
 
@@ -58,75 +60,84 @@ public abstract class LevelRendererMixin {
         this.worldRenderer.renderBlockEntities(poseStack, pos.x(), pos.y(), pos.z(), this.destructionProgress, deltaTracker.getGameTimeDeltaPartialTick(false));
     }
 
-    /**
-     * @author
-     * @reason
-     */
-    @Overwrite
-    private void setupRender(Camera camera, Frustum frustum, boolean isCapturedFrustum, boolean spectator) {
+    @Inject(method = "renderLevel", at = @At("HEAD"))
+    private void prepareLevelRenderState(DeltaTracker deltaTracker, boolean bl, Camera camera, GameRenderer gameRenderer, LightTexture lightTexture, Matrix4f matrix4f, Matrix4f matrix4f2, CallbackInfo ci) {
+        prepareWorldPassRenderState();
+    }
+
+    @Inject(method = "setupRender", at = @At("HEAD"))
+    private void setupRender(Camera camera, Frustum frustum, boolean isCapturedFrustum, boolean spectator, CallbackInfo ci) {
         this.worldRenderer.setupRenderer(camera, frustum, isCapturedFrustum, spectator);
     }
 
-    /**
-     * @author
-     * @reason
-     */
-    @Overwrite
-    public boolean isSectionCompiled(BlockPos blockPos) {
-        return this.worldRenderer.isSectionCompiled(blockPos);
-    }
-
-    /**
-     * @author
-     * @reason
-     */
-    @Overwrite
-    private void renderSectionLayer(RenderType renderType, double camX, double camY, double camZ, Matrix4f modelView, Matrix4f projectionMatrix) {
+    @Inject(method = "renderSectionLayer", at = @At("HEAD"))
+    private void renderSectionLayer(RenderType renderType, double camX, double camY, double camZ, Matrix4f modelView, Matrix4f projectionMatrix, CallbackInfo ci) {
         this.worldRenderer.renderSectionLayer(renderType, camX, camY, camZ, modelView, projectionMatrix);
     }
 
-    /**
-     * @author
-     * @reason
-     */
-    @Overwrite
-    public void onChunkLoaded(ChunkPos chunkPos) {
+    @Inject(method = "renderSnowAndRain", at = @At("HEAD"))
+    private void prepareWeatherRenderState(LightTexture lightTexture, float partialTick, double camX, double camY, double camZ, CallbackInfo ci) {
+        prepareWorldPassRenderState();
     }
 
-    /**
-     * @author
-     * @reason
-     */
-    @Overwrite
-    private void setSectionDirty(int x, int y, int z, boolean flag) {
+    @Inject(method = "renderSky", at = @At("HEAD"))
+    private void prepareSkyRenderState(Matrix4f modelView, Matrix4f projection, float partialTick, Camera camera, boolean isFoggy, Runnable skyFogSetup, CallbackInfo ci) {
+        prepareWorldPassRenderState();
+    }
+
+    @Inject(method = "renderClouds", at = @At("HEAD"))
+    private void prepareCloudRenderState(PoseStack poseStack, Matrix4f modelView, Matrix4f projection, float partialTick, double camX, double camY, double camZ, CallbackInfo ci) {
+        prepareWorldPassRenderState();
+    }
+
+    @Inject(method = "renderWorldBorder", at = @At("HEAD"))
+    private void prepareWorldBorderRenderState(Camera camera, CallbackInfo ci) {
+        prepareWorldPassRenderState();
+    }
+
+    @Inject(method = "renderDebug", at = @At("HEAD"))
+    private void prepareDebugRenderState(PoseStack poseStack, MultiBufferSource bufferSource, Camera camera, CallbackInfo ci) {
+        prepareWorldPassRenderState();
+    }
+
+    @Unique
+    private void prepareWorldPassRenderState() {
+        TerrainRenderState.prepareWorldTerrainState();
+    }
+
+    @Inject(method = "applyFrustum", at = @At("HEAD"), cancellable = true)
+    private void skipVanillaSectionCollection(Frustum frustum, CallbackInfo ci) {
+        ci.cancel();
+    }
+
+    @Inject(method = "isSectionCompiled", at = @At("HEAD"), cancellable = true)
+    public void isSectionCompiled(BlockPos blockPos, CallbackInfoReturnable<Boolean> cir) {
+        cir.setReturnValue(this.worldRenderer.isSectionCompiled(blockPos));
+    }
+
+    @Inject(method = "onChunkLoaded", at = @At("HEAD"), cancellable = true)
+    public void onChunkLoaded(ChunkPos chunkPos, CallbackInfo ci) {
+        ci.cancel();
+    }
+
+    @Inject(method = "setSectionDirty(IIIZ)V", at = @At("HEAD"))
+    private void setSectionDirty(int x, int y, int z, boolean flag, CallbackInfo ci) {
         this.worldRenderer.setSectionDirty(x, y, z, flag);
     }
 
-    /**
-     * @author
-     * @reason
-     */
-    @Overwrite
-    public String getSectionStatistics() {
-        return this.worldRenderer.getChunkStatistics();
+    @Inject(method = "getSectionStatistics", at = @At("HEAD"), cancellable = true)
+    public void getSectionStatistics(CallbackInfoReturnable<String> cir) {
+        cir.setReturnValue(this.worldRenderer.getChunkStatistics());
     }
 
-    /**
-     * @author
-     * @reason
-     */
-    @Overwrite
-    public boolean hasRenderedAllSections() {
-        return !this.worldRenderer.graphNeedsUpdate() && this.worldRenderer.getTaskDispatcher().isIdle();
+    @Inject(method = "hasRenderedAllSections", at = @At("HEAD"), cancellable = true)
+    public void hasRenderedAllSections(CallbackInfoReturnable<Boolean> cir) {
+        cir.setReturnValue(!this.worldRenderer.graphNeedsUpdate() && this.worldRenderer.getTaskDispatcher().isIdle());
     }
 
-    /**
-     * @author
-     * @reason
-     */
-    @Overwrite
-    public int countRenderedSections() {
-        return this.worldRenderer.getVisibleSectionsCount();
+    @Inject(method = "countRenderedSections", at = @At("HEAD"), cancellable = true)
+    public void countRenderedSections(CallbackInfoReturnable<Integer> cir) {
+        cir.setReturnValue(this.worldRenderer.getVisibleSectionsCount());
     }
 
     @Redirect(method = "renderWorldBorder", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/GameRenderer;getDepthFar()F"))

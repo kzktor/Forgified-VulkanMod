@@ -1,40 +1,60 @@
 package net.vulkanmod;
 
-import net.fabricmc.api.ClientModInitializer;
-import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.network.chat.Component;
+import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
+import net.neoforged.fml.loading.FMLPaths;
+import net.neoforged.fml.ModContainer;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 import net.vulkanmod.config.Config;
 import net.vulkanmod.config.Platform;
+import net.vulkanmod.config.gui.VOptionScreen;
 import net.vulkanmod.config.video.VideoModeManager;
+import net.vulkanmod.compat.CompatBootstrap;
+import net.vulkanmod.compat.CompatReport;
+import net.vulkanmod.compat.RuntimeOptions;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.nio.file.Path;
 
-public class Initializer implements ClientModInitializer {
+@Mod("vulkanmod")
+public class Initializer {
 	public static final Logger LOGGER = LogManager.getLogger("VulkanMod");
 
-	private static String VERSION;
+	private static String VERSION = "0.4.9-dev";
 	public static Config CONFIG;
 
-	@Override
-	public void onInitializeClient() {
+	static {
 
-		VERSION = FabricLoader.getInstance()
-				.getModContainer("vulkanmod")
-				.get()
-				.getMetadata()
-				.getVersion().getFriendlyString();
+		try {
+			Platform.init();
+			VideoModeManager.init();
+			Path configPath = Path.of("config", "vulkanmod_settings.json");
+			CONFIG = loadConfig(configPath);
+		} catch (Exception e) {
+			CONFIG = new Config();
+		}
+	}
 
+	public Initializer(IEventBus modEventBus, ModContainer modContainer) {
+		VERSION = modContainer.getModInfo().getVersion().toString();
+		modEventBus.addListener(this::onInitializeClient);
+		modContainer.registerExtensionPoint(IConfigScreenFactory.class,
+				(java.util.function.Supplier<IConfigScreenFactory>) () ->
+						(container, parent) -> new VOptionScreen(Component.literal("VulkanMod Settings"), parent));
+
+		net.vulkanmod.compat.SmokeAutoShot.registerIfEnabled();
+	}
+
+	private void onInitializeClient(FMLClientSetupEvent event) {
 		LOGGER.info("== VulkanMod ==");
-
-		Platform.init();
-		VideoModeManager.init();
-
-		var configPath = FabricLoader.getInstance()
-				.getConfigDir()
-				.resolve("vulkanmod_settings.json");
-
-		CONFIG = loadConfig(configPath);
+		CompatBootstrap.init();
+		if (RuntimeOptions.diagnosticsEnabled()) {
+			CompatReport.logReport();
+		}
+		CompatReport.logRuntimeHints();
 	}
 
 	private static Config loadConfig(Path path) {

@@ -12,14 +12,13 @@ import net.vulkanmod.vulkan.framebuffer.RenderPass;
 import net.vulkanmod.vulkan.texture.VTextureSelector;
 import net.vulkanmod.vulkan.util.DrawUtil;
 import org.lwjgl.opengl.GL30;
-import org.lwjgl.system.MemoryStack;
 import org.spongepowered.asm.mixin.*;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-@Mixin(RenderTarget.class)
+@Mixin(value = RenderTarget.class, priority = 900)
 public abstract class RenderTargetMixin implements ExtendedRenderTarget {
 
     @Shadow public int viewWidth;
@@ -37,17 +36,14 @@ public abstract class RenderTargetMixin implements ExtendedRenderTarget {
     boolean needClear = false;
     boolean bound = false;
 
-    /**
-     * @author
-     */
-    @Overwrite
-    public void clear(boolean getError) {
+    @Inject(method = "clear", at = @At("HEAD"), cancellable = true)
+    public void clear(boolean getError, CallbackInfo ci) {
+        ci.cancel();
         RenderSystem.assertOnRenderThreadOrInit();
 
         if(!Renderer.isRecording())
             return;
 
-        // If the framebuffer is not bound postpone clear
         GlFramebuffer glFramebuffer = GlFramebuffer.getFramebuffer(this.frameBufferId);
         if(!bound || GlFramebuffer.getBoundFramebuffer() != glFramebuffer) {
             needClear = true;
@@ -65,37 +61,27 @@ public abstract class RenderTargetMixin implements ExtendedRenderTarget {
         needClear = false;
     }
 
-    /**
-     * @author
-     */
-    @Overwrite
-    public void bindRead() {
+    @Inject(method = "bindRead", at = @At("HEAD"), cancellable = true)
+    public void bindRead(CallbackInfo ci) {
         RenderSystem.assertOnRenderThread();
 
         applyClear();
 
         GlTexture.bindTexture(this.colorTextureId);
 
-        try (MemoryStack stack = MemoryStack.stackPush()) {
-            GlTexture.getBoundTexture().getVulkanImage()
-                    .readOnlyLayout(stack, Renderer.getCommandBuffer());
-        }
+        GlTexture.transitionReadOnly();
+        ci.cancel();
     }
 
-    /**
-     * @author
-     */
-    @Overwrite
-    public void unbindRead() {
+    @Inject(method = "unbindRead", at = @At("HEAD"), cancellable = true)
+    public void unbindRead(CallbackInfo ci) {
         RenderSystem.assertOnRenderThreadOrInit();
         GlTexture.bindTexture(0);
+        ci.cancel();
     }
 
-    /**
-     * @author
-     */
-    @Overwrite
-    private void _bindWrite(boolean bl) {
+    @Inject(method = "_bindWrite", at = @At("HEAD"), cancellable = true)
+    private void _bindWrite(boolean bl, CallbackInfo ci) {
         RenderSystem.assertOnRenderThreadOrInit();
 
         GlFramebuffer.bindFramebuffer(GL30.GL_FRAMEBUFFER, this.frameBufferId);
@@ -105,14 +91,12 @@ public abstract class RenderTargetMixin implements ExtendedRenderTarget {
 
         this.bound = true;
         if (needClear)
-            clear(false);
+            this.clear(false);
+        ci.cancel();
     }
 
-    /**
-     * @author
-     */
-    @Overwrite
-    public void unbindWrite() {
+    @Inject(method = "unbindWrite", at = @At("HEAD"), cancellable = true)
+    public void unbindWrite(CallbackInfo ci) {
         if (!RenderSystem.isOnRenderThread()) {
             RenderSystem.recordRenderCall(() -> {
                 GlStateManager._glBindFramebuffer(36160, 0);
@@ -122,11 +106,16 @@ public abstract class RenderTargetMixin implements ExtendedRenderTarget {
             GlStateManager._glBindFramebuffer(36160, 0);
             this.bound = false;
         }
+        ci.cancel();
     }
+
+    @Shadow public abstract void clear(boolean getError);
+
+    @Shadow protected abstract void _bindWrite(boolean bl);
 
     @Inject(method = "_blitToScreen", at = @At("HEAD"), cancellable = true)
     private void _blitToScreen(int width, int height, boolean disableBlend, CallbackInfo ci) {
-        // If the target needs clear it means it has not been used, thus we can skip blit
+
         if (!this.needClear) {
             Framebuffer framebuffer = GlFramebuffer.getFramebuffer(this.frameBufferId).getFramebuffer();
             VTextureSelector.bindTexture(0, framebuffer.getColorAttachment());
@@ -139,7 +128,7 @@ public abstract class RenderTargetMixin implements ExtendedRenderTarget {
 
     @Inject(method = "getColorTextureId", at = @At("HEAD"))
     private void injClear(CallbackInfoReturnable<Integer> cir) {
-        applyClear();
+        prepareColorTextureForSampling();
     }
 
     @Override
@@ -163,5 +152,17 @@ public abstract class RenderTargetMixin implements ExtendedRenderTarget {
                 GlFramebuffer.beginRendering(currentFramebuffer);
             }
         }
+    }
+
+    @Unique
+    private void prepareColorTextureForSampling() {
+        applyClear();
+
+        GlFramebuffer glFramebuffer = GlFramebuffer.getFramebuffer(this.frameBufferId);
+        if (this.bound && glFramebuffer != null && GlFramebuffer.getBoundFramebuffer() == glFramebuffer) {
+            return;
+        }
+
+        GlTexture.transitionReadOnly(this.colorTextureId);
     }
 }

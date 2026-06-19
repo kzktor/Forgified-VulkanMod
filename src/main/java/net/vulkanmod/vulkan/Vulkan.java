@@ -1,5 +1,6 @@
 package net.vulkanmod.vulkan;
 
+import net.vulkanmod.Initializer;
 import net.vulkanmod.vulkan.device.Device;
 import net.vulkanmod.vulkan.device.DeviceManager;
 import net.vulkanmod.vulkan.framebuffer.SwapChain;
@@ -40,9 +41,7 @@ import static org.lwjgl.vulkan.VK12.VK_API_VERSION_1_2;
 public class Vulkan {
 
     public static final boolean ENABLE_VALIDATION_LAYERS = false;
-//    public static final boolean ENABLE_VALIDATION_LAYERS = true;
 
-    //    public static final boolean DYNAMIC_RENDERING = true;
     public static final boolean DYNAMIC_RENDERING = false;
 
     public static final Set<String> VALIDATION_LAYERS;
@@ -51,10 +50,9 @@ public class Vulkan {
         if (ENABLE_VALIDATION_LAYERS) {
             VALIDATION_LAYERS = new HashSet<>();
             VALIDATION_LAYERS.add("VK_LAYER_KHRONOS_validation");
-//            VALIDATION_LAYERS.add("VK_LAYER_KHRONOS_synchronization2");
 
         } else {
-            // We are not going to use it, so we don't create it
+
             VALIDATION_LAYERS = null;
         }
     }
@@ -79,8 +77,6 @@ public class Vulkan {
         if ((messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) != 0) {
             s = "\u001B[31m" + callbackData.pMessageString();
 
-//            System.err.println("Stack dump:");
-//            Thread.dumpStack();
         } else {
             s = callbackData.pMessageString();
         }
@@ -139,13 +135,18 @@ public class Vulkan {
     private static int DEFAULT_DEPTH_FORMAT = 0;
 
     public static void initVulkan(long window) {
+        Initializer.LOGGER.info("VulkanMod: initVulkan starting...");
         createInstance();
+        Initializer.LOGGER.info("VulkanMod: Instance created.");
         setupDebugMessenger();
         createSurface(window);
+        Initializer.LOGGER.info("VulkanMod: Surface created.");
 
         DeviceManager.init(instance);
+        Initializer.LOGGER.info("VulkanMod: DeviceManager initialized.");
 
         createVma();
+        Initializer.LOGGER.info("VulkanMod: VMA created.");
         MemoryTypes.createMemoryTypes();
 
         createCommandPool();
@@ -153,7 +154,9 @@ public class Vulkan {
 
         setupDepthFormat();
         createSwapChain();
+        Initializer.LOGGER.info("VulkanMod: SwapChain created.");
         Renderer.initRenderer();
+        Initializer.LOGGER.info("VulkanMod: Renderer initialized.");
 
     }
 
@@ -193,11 +196,7 @@ public class Vulkan {
 
         freeStagingBuffers();
 
-        try {
-            MemoryManager.getInstance().freeAllBuffers();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        MemoryManager.cleanUp();
 
         vmaDestroyAllocator(allocator);
 
@@ -218,8 +217,6 @@ public class Vulkan {
         }
 
         try (MemoryStack stack = stackPush()) {
-
-            // Use calloc to initialize the structs with 0s. Otherwise, the program can crash due to random values
 
             VkApplicationInfo appInfo = VkApplicationInfo.calloc(stack);
 
@@ -245,7 +242,6 @@ public class Vulkan {
                 createInfo.pNext(debugCreateInfo.address());
             }
 
-            // We need to retrieve the pointer of the created instance
             PointerBuffer instancePtr = stack.mallocPointer(1);
 
             int result = vkCreateInstance(createInfo, null, instancePtr);
@@ -277,10 +273,10 @@ public class Vulkan {
 
     private static void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo) {
         debugCreateInfo.sType(VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT);
-//        debugCreateInfo.messageSeverity(VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT);
+
         debugCreateInfo.messageSeverity(VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT);
         debugCreateInfo.messageType(VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT);
-//        debugCreateInfo.messageType(VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT);
+
         debugCreateInfo.pfnUserCallback(Vulkan::debugCallback);
     }
 
@@ -312,7 +308,8 @@ public class Vulkan {
 
             LongBuffer pSurface = stack.longs(VK_NULL_HANDLE);
 
-            checkResult(glfwCreateWindowSurface(instance, window, null, pSurface),
+            checkResult(org.lwjgl.glfw.GLFWVulkan.nglfwCreateWindowSurface(
+                    instance.address(), window, 0L, org.lwjgl.system.MemoryUtil.memAddress(pSurface)),
                     "Failed to create window surface");
 
             surface = pSurface.get(0);
@@ -426,7 +423,6 @@ public class Vulkan {
             extensions.put(glfwExtensions);
             extensions.put(stack.UTF8(VK_EXT_DEBUG_UTILS_EXTENSION_NAME));
 
-            // Rewind the buffer before returning it to reset its position back to 0
             return extensions.rewind();
         }
 

@@ -18,11 +18,10 @@ public class FrustumMixin implements FrustumMixed {
     @Shadow private double camZ;
     private final VFrustum vFrustum = new VFrustum();
 
-    @Inject(method = "calculateFrustum", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "calculateFrustum", at = @At("HEAD"))
     private void calculateFrustum(Matrix4f modelView, Matrix4f projection, CallbackInfo ci) {
-//        this.vFrustum = new VFrustum(modelView, projection);
+
         this.vFrustum.calculateFrustum(modelView, projection);
-        ci.cancel();
     }
 
     @Inject(method = "prepare", at = @At("RETURN"))

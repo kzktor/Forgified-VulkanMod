@@ -46,7 +46,6 @@ public class VulkanImage {
 
     private int currentLayout;
 
-    //Used for swap chain images
     public VulkanImage(long id, int format, int mipLevels, int width, int height, int formatSize, int usage, long imageView) {
         this.id = id;
         this.mainImageView = imageView;
@@ -116,7 +115,7 @@ public class VulkanImage {
                     .createVulkanImage();
             image.uploadSubTextureAsync(0, image.width, image.height, 0, 0, 0, 0, 0, buffer);
             return image;
-//            return createTextureImage(1, 1, 4, false, false, buffer);
+
         }
     }
 
@@ -194,6 +193,10 @@ public class VulkanImage {
     public void uploadSubTextureAsync(int mipLevel, int width, int height, int xOffset, int yOffset, int unpackSkipRows, int unpackSkipPixels, int unpackRowLength, ByteBuffer buffer) {
         long imageSize = buffer.limit();
 
+        if (net.vulkanmod.compat.observer.CompatProfiler.ENABLED) {
+            net.vulkanmod.compat.observer.CompatProfiler.textureUploadBytes += imageSize;
+        }
+
         CommandPool.CommandBuffer commandBuffer = DeviceManager.getGraphicsQueue().getCommandBuffer();
         try (MemoryStack stack = stackPush()) {
             transferDstLayout(stack, commandBuffer.getHandle());
@@ -209,7 +212,7 @@ public class VulkanImage {
 
         long fence = DeviceManager.getGraphicsQueue().endIfNeeded(commandBuffer);
         if (fence != VK_NULL_HANDLE)
-//            Synchronization.INSTANCE.addFence(fence);
+
             Synchronization.INSTANCE.addCommandBuffer(commandBuffer);
     }
 
@@ -255,7 +258,7 @@ public class VulkanImage {
 
     public static void transitionImageLayout(MemoryStack stack, VkCommandBuffer commandBuffer, VulkanImage image, int newLayout) {
         if (image.currentLayout == newLayout) {
-//            System.out.println("new layout is equal to current layout");
+
             return;
         }
 
@@ -357,11 +360,15 @@ public class VulkanImage {
         image.currentLayout = newLayout;
     }
 
-    private static boolean hasStencilComponent(int format) {
+    public static boolean hasStencilComponent(int format) {
         return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
     }
 
     public void free() {
+        if (this.allocation == 0L) {
+            return;
+        }
+
         MemoryManager.getInstance().addToFreeable(this);
     }
 
@@ -369,15 +376,23 @@ public class VulkanImage {
         if (this.id == 0L)
             return;
 
-        MemoryManager.freeImage(this.id, this.allocation);
+        if (this.mainImageView != 0L) {
+            vkDestroyImageView(Vulkan.getVkDevice(), this.mainImageView, null);
+            this.mainImageView = 0L;
+        }
 
-        vkDestroyImageView(Vulkan.getVkDevice(), this.mainImageView, null);
-
-        if (this.levelImageViews != null)
+        if (this.levelImageViews != null) {
             Arrays.stream(this.levelImageViews).forEach(
-                    imageView -> vkDestroyImageView(Vulkan.getVkDevice(), this.mainImageView, null));
+                    imageView -> vkDestroyImageView(Vulkan.getVkDevice(), imageView, null));
+            this.levelImageViews = null;
+        }
+
+        if (this.allocation != 0L) {
+            MemoryManager.freeImage(this.id, this.allocation);
+        }
 
         this.id = 0L;
+        this.allocation = 0L;
     }
 
     public int getCurrentLayout() {
@@ -504,7 +519,6 @@ public class VulkanImage {
                      VK_FORMAT_R8G8B8A8_UINT, VK_FORMAT_R8G8B8A8_SINT -> 4;
                 case VK_FORMAT_R8_UNORM -> 1;
 
-//                default -> throw new IllegalArgumentException(String.format("Unxepcted format: %s", format));
                 default -> 0;
             };
         }

@@ -19,7 +19,13 @@ public interface MainPass {
 
     default void bindAsTexture() {}
 
+    default void resolveRenderScaleForGui() {}
+
     default int getColorAttachmentGlId() {
+        return -1;
+    }
+
+    default int getDepthAttachmentGlId() {
         return -1;
     }
 }

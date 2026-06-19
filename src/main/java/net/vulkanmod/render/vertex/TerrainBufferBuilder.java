@@ -176,6 +176,17 @@ public class TerrainBufferBuilder {
         this.discard();
     }
 
+    public void close() {
+        if (this.bufferPtr != 0L) {
+            ALLOCATOR.free(this.bufferPtr);
+            this.bufferPtr = 0L;
+        }
+
+        this.capacity = 0;
+        this.discard();
+        this.building = false;
+    }
+
     public void discard() {
         this.renderedBufferCount = 0;
         this.renderedBufferPointer = 0;

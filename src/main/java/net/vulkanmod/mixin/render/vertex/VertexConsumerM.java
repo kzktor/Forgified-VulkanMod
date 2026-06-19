@@ -16,12 +16,8 @@ import org.spongepowered.asm.mixin.Shadow;
 @Mixin(VertexConsumer.class)
 public interface VertexConsumerM {
 
-
     @Shadow void addVertex(float f, float g, float h, int i, float j, float k, int l, int m, float n, float o, float p);
 
-    /**
-     * @author
-     */
     @Overwrite
     default void putBulkData(PoseStack.Pose matrixEntry, BakedQuad quad, float[] brightness, float red, float green, float blue, float alpha, int[] lights, int overlay, boolean useQuadColorData) {
         int[] js = quad.getVertices();
@@ -55,7 +51,7 @@ public interface VertexConsumerM {
                 b = brightness[k] * blue;
             }
 
-            int color = ColorUtil.RGBA.pack(r, g, b, alpha);
+            int color = ColorUtil.RGBA.pack(r, g, b, useQuadColorData ? alpha * ColorUtil.RGBA.unpackA(js[i + 3]) : alpha);
 
             int light = lights[k];
             float u = Float.intBitsToFloat(js[i + 4]);

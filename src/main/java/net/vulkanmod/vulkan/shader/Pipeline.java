@@ -23,6 +23,7 @@ import net.vulkanmod.vulkan.texture.VulkanImage;
 import org.apache.commons.lang3.Validate;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
+import org.lwjgl.PointerBuffer;
 import org.lwjgl.vulkan.*;
 
 import java.io.InputStream;
@@ -44,19 +45,40 @@ import static org.lwjgl.vulkan.VK10.*;
 public abstract class Pipeline {
 
     private static final VkDevice DEVICE = Vulkan.getVkDevice();
+    private static final java.nio.file.Path CACHE_PATH = java.nio.file.Path.of("config", "vulkanmod_pipeline_cache.bin");
     protected static final long PIPELINE_CACHE = createPipelineCache();
-    protected static final List<Pipeline> PIPELINES = new LinkedList<>();
+    public static final List<Pipeline> PIPELINES = new LinkedList<>();
 
     private static long createPipelineCache() {
         try (MemoryStack stack = stackPush()) {
-
             VkPipelineCacheCreateInfo cacheCreateInfo = VkPipelineCacheCreateInfo.calloc(stack);
             cacheCreateInfo.sType(VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO);
 
-            LongBuffer pPipelineCache = stack.mallocLong(1);
+            ByteBuffer initialData = null;
+            if (java.nio.file.Files.exists(CACHE_PATH)) {
+                try {
+                    byte[] bytes = java.nio.file.Files.readAllBytes(CACHE_PATH);
+                    if (bytes.length > 0) {
+                        initialData = MemoryUtil.memAlloc(bytes.length);
+                        initialData.put(bytes);
+                        initialData.flip();
 
-            if (vkCreatePipelineCache(DEVICE, cacheCreateInfo, null, pPipelineCache) != VK_SUCCESS) {
-                throw new RuntimeException("Failed to create graphics pipeline");
+                        cacheCreateInfo.pInitialData(initialData);
+                    }
+                } catch (Exception e) {
+                    System.err.println("[VulkanMod] Failed to load pipeline cache: " + e.getMessage());
+                }
+            }
+
+            LongBuffer pPipelineCache = stack.mallocLong(1);
+            int result = vkCreatePipelineCache(DEVICE, cacheCreateInfo, null, pPipelineCache);
+
+            if (initialData != null) {
+                MemoryUtil.memFree(initialData);
+            }
+
+            if (result != VK_SUCCESS) {
+                throw new RuntimeException("Failed to create pipeline cache. Result: " + result);
             }
 
             return pPipelineCache.get(0);
@@ -64,6 +86,34 @@ public abstract class Pipeline {
     }
 
     public static void destroyPipelineCache() {
+        try (MemoryStack stack = stackPush()) {
+            PointerBuffer pDataSize = stack.mallocPointer(1);
+            int result = vkGetPipelineCacheData(DEVICE, PIPELINE_CACHE, pDataSize, null);
+
+            if (result == VK_SUCCESS && pDataSize.get(0) > 0) {
+                long dataSize = pDataSize.get(0);
+                ByteBuffer dataBuffer = MemoryUtil.memAlloc((int) dataSize);
+
+                result = vkGetPipelineCacheData(DEVICE, PIPELINE_CACHE, pDataSize, dataBuffer);
+                if (result == VK_SUCCESS) {
+                    byte[] bytes = new byte[(int) dataSize];
+                    dataBuffer.get(bytes);
+
+                    try {
+                        if (!java.nio.file.Files.exists(CACHE_PATH.getParent())) {
+                            java.nio.file.Files.createDirectories(CACHE_PATH.getParent());
+                        }
+                        java.nio.file.Files.write(CACHE_PATH, bytes);
+                    } catch (Exception e) {
+                        System.err.println("[VulkanMod] Failed to write pipeline cache: " + e.getMessage());
+                    }
+                }
+                MemoryUtil.memFree(dataBuffer);
+            }
+        } catch (Exception e) {
+            System.err.println("[VulkanMod] Error destroying pipeline cache: " + e.getMessage());
+        }
+
         vkDestroyPipelineCache(DEVICE, PIPELINE_CACHE, null);
     }
 
@@ -84,6 +134,10 @@ public abstract class Pipeline {
     protected ManualUBO manualUBO;
     protected List<ImageDescriptor> imageDescriptors;
     protected PushConstants pushConstants;
+
+    public List<UBO> getBuffers() {
+        return buffers;
+    }
 
     public Pipeline(String name) {
         this.name = name;
@@ -129,7 +183,6 @@ public abstract class Pipeline {
 
     protected void createPipelineLayout() {
         try (MemoryStack stack = stackPush()) {
-            // ===> PIPELINE LAYOUT CREATION <===
 
             VkPipelineLayoutCreateInfo pipelineLayoutInfo = VkPipelineLayoutCreateInfo.calloc(stack);
             pipelineLayoutInfo.sType(VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO);
@@ -271,8 +324,6 @@ public abstract class Pipeline {
                 int currentOffset = (int) ub.getUsedBytes();
                 this.dynamicOffsets.put(i, currentOffset);
 
-                // TODO: non mappable memory
-
                 int alignedSize = UniformBuffer.getAlignedSize(ubo.getSize());
                 ub.checkCapacity(alignedSize);
 
@@ -326,20 +377,16 @@ public abstract class Pipeline {
                 this.createDescriptorSets(stack);
                 this.currentIdx = 0;
 
-                //debug
-//                System.out.println("resized descriptor pool to: " + this.poolSize);
             }
         }
 
         private void updateDescriptorSet(MemoryStack stack, UniformBuffer uniformBuffer) {
 
-            //Check if update is needed
             if (!needsUpdate(uniformBuffer))
                 return;
 
             this.currentIdx++;
 
-            //Check pool size
             checkPoolSize(stack);
 
             this.currentSet = this.sets.get(this.currentIdx);
@@ -347,7 +394,6 @@ public abstract class Pipeline {
             VkWriteDescriptorSet.Buffer descriptorWrites = VkWriteDescriptorSet.calloc(pipeline.buffers.size() + pipeline.imageDescriptors.size(), stack);
             VkDescriptorBufferInfo.Buffer[] bufferInfos = new VkDescriptorBufferInfo.Buffer[pipeline.buffers.size()];
 
-            //TODO maybe ubo update is not needed everytime
             int i = 0;
             for (UBO ubo : pipeline.buffers) {
                 UniformBuffer ub = ubo.getUniformBuffer();
@@ -408,7 +454,6 @@ public abstract class Pipeline {
 
         private void createDescriptorSets(MemoryStack stack) {
             LongBuffer layout = stack.mallocLong(this.poolSize);
-//            layout.put(0, descriptorSetLayout);
 
             for (int i = 0; i < this.poolSize; ++i) {
                 layout.put(i, pipeline.descriptorSetLayout);
@@ -435,7 +480,7 @@ public abstract class Pipeline {
             int i;
             for (i = 0; i < pipeline.buffers.size(); ++i) {
                 VkDescriptorPoolSize uniformBufferPoolSize = poolSizes.get(i);
-//                uniformBufferPoolSize.type(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+
                 uniformBufferPoolSize.type(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC);
                 uniformBufferPoolSize.descriptorCount(this.poolSize);
             }
@@ -533,7 +578,7 @@ public abstract class Pipeline {
         }
 
         public void compileShaders() {
-            String resourcePath = SPIRVUtils.class.getResource("/assets/vulkanmod/shaders/").toExternalForm();
+            String resourcePath = "/assets/vulkanmod/shaders/";
 
             this.vertShaderSPIRV = compileShaderAbsoluteFile(String.format("%s%s.vsh", resourcePath, this.shaderPath), ShaderKind.VERTEX_SHADER);
             this.fragShaderSPIRV = compileShaderAbsoluteFile(String.format("%s%s.fsh", resourcePath, this.shaderPath), ShaderKind.FRAGMENT_SHADER);
@@ -553,7 +598,7 @@ public abstract class Pipeline {
             JsonObject jsonObject;
 
             String resourcePath = String.format("/assets/vulkanmod/shaders/%s.json", this.shaderPath);
-            InputStream stream = Pipeline.class.getResourceAsStream(resourcePath);
+            InputStream stream = openResource(resourcePath);
 
             if (stream == null)
                 throw new NullPointerException(String.format("Failed to load: %s", resourcePath));
@@ -586,6 +631,18 @@ public abstract class Pipeline {
             }
         }
 
+        private static InputStream openResource(String resourcePath) {
+            String classLoaderPath = resourcePath.startsWith("/") ? resourcePath.substring(1) : resourcePath;
+            ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader();
+            if (contextClassLoader != null) {
+                InputStream stream = contextClassLoader.getResourceAsStream(classLoaderPath);
+                if (stream != null) {
+                    return stream;
+                }
+            }
+            return Pipeline.class.getResourceAsStream(resourcePath);
+        }
+
         private void parseUboNode(JsonElement jsonelement) {
             JsonObject jsonobject = GsonHelper.convertToJsonObject(jsonelement, "UBO");
             int binding = GsonHelper.getAsInt(jsonobject, "binding");
@@ -596,7 +653,7 @@ public abstract class Pipeline {
 
             for (JsonElement jsonelement2 : fields) {
                 JsonObject jsonobject2 = GsonHelper.convertToJsonObject(jsonelement2, "uniform");
-                //need to store some infos
+
                 String name = GsonHelper.getAsString(jsonobject2, "name");
                 String type2 = GsonHelper.getAsString(jsonobject2, "type");
                 int j = GsonHelper.getAsInt(jsonobject2, "count");

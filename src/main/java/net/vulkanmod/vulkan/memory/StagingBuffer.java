@@ -25,13 +25,15 @@ public class StagingBuffer extends Buffer {
             resizeBuffer((this.bufferSize + size) * 2);
         }
 
-//        VUtil.memcpy(byteBuffer, this.data.getByteBuffer(0, this.bufferSize), this.usedBytes);
         nmemcpy(this.data.get(0) + this.usedBytes, MemoryUtil.memAddress(byteBuffer), size);
 
         offset = usedBytes;
         usedBytes += size;
 
-        //createVertexBuffer(vertexSize, vertexCount, byteBuffer);
+        if (net.vulkanmod.compat.observer.CompatProfiler.ENABLED) {
+            net.vulkanmod.compat.observer.CompatProfiler.bufferUploadBytes += size;
+        }
+
     }
 
     public void align(int alignment) {
@@ -48,6 +50,8 @@ public class StagingBuffer extends Buffer {
         MemoryManager.getInstance().addToFreeable(this);
         this.createBuffer(newSize);
 
-        System.out.println("resized staging buffer to: " + newSize);
+        if (net.vulkanmod.compat.RuntimeOptions.diagnosticsEnabled()) {
+            net.vulkanmod.Initializer.LOGGER.info("Resized staging buffer to {}", newSize);
+        }
     }
 }

@@ -50,10 +50,9 @@ public class AreaBuffer {
     }
 
     public Segment upload(ByteBuffer byteBuffer, int oldOffset, DrawBuffers.DrawParameters drawParameters) {
-        // Free old segment
+
         if (oldOffset != -1) {
-            // Need to delay segment freeing since it might be still used by prev frames in flight
-//            this.setSegmentFree(oldOffset);
+
             MemoryManager.getInstance().addToFreeSegment(this, oldOffset);
         }
 
@@ -114,7 +113,13 @@ public class AreaBuffer {
     public Segment reallocate(int uploadSize) {
         int oldSize = this.size;
 
-        int minIncrement = this.size >> 3;
+        int minIncrement;
+        if (this.usage == Usage.INDEX.usage) {
+            minIncrement = Math.min(this.size, 2097152);
+        } else {
+            minIncrement = Math.min(this.size >> 2, 4194304);
+        }
+        minIncrement = Math.max(minIncrement, 65536);
         minIncrement = Util.align(minIncrement, this.elementSize);
 
         int increment = Math.max(minIncrement, uploadSize << 1);
@@ -128,9 +133,6 @@ public class AreaBuffer {
         Buffer dst = this.allocateBuffer();
 
         UploadManager.INSTANCE.copyBuffer(this.buffer, dst);
-
-        // TODO: moving only used segments causes corruption
-//        moveUsedSegments(dst);
 
         this.buffer.freeBuffer();
         this.buffer = dst;
@@ -321,7 +323,6 @@ public class AreaBuffer {
                     if (segment.offset + segment.size != this.size)
                         LOGGER.error(String.format("last segment end (%d) does not match buffer size (%d)", segmentEnd, this.size));
 
-                    // Check segmentation
                     if (segment.offset != this.used)
                         LOGGER.error(String.format("last segment offset (%d) does not match buffer used size (%d)", segmentEnd, this.size));
                 }

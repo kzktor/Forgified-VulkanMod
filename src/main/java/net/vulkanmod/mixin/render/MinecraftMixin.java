@@ -8,7 +8,10 @@ import net.minecraft.client.GraphicsStatus;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Options;
 import net.minecraft.client.main.GameConfig;
+import net.vulkanmod.compat.ExternalClientFaultBoundary;
 import net.vulkanmod.Initializer;
+import net.vulkanmod.compat.opengl.GlCapabilitiesFallback;
+import net.vulkanmod.config.GraphicsModeCompatibility;
 import net.vulkanmod.render.texture.SpriteUtil;
 import net.vulkanmod.vulkan.Renderer;
 import net.vulkanmod.vulkan.Vulkan;
@@ -16,6 +19,7 @@ import org.objectweb.asm.Opcodes;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
@@ -31,22 +35,34 @@ public class MinecraftMixin {
     @Shadow public boolean noRender;
     @Shadow @Final public Options options;
 
+    @Inject(method = "<init>", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/systems/RenderSystem;initRenderer(IZ)V", shift = At.Shift.AFTER))
+    private void installGlCapabilitiesFallback(GameConfig gameConfig, CallbackInfo ci) {
+        GlCapabilitiesFallback.install();
+    }
+
     @Inject(method = "<init>", at = @At(value = "RETURN"))
     private void forceGraphicsMode(GameConfig gameConfig, CallbackInfo ci) {
-        var graphicsModeOption = this.options.graphicsMode();
+        clampUnsupportedGraphicsMode();
+    }
 
-        if(graphicsModeOption.get() == GraphicsStatus.FABULOUS) {
-            Initializer.LOGGER.error("Fabulous graphics mode not supported, forcing Fancy");
-            graphicsModeOption.set(GraphicsStatus.FANCY);
+    @Unique
+    private void clampUnsupportedGraphicsMode() {
+        var graphicsModeOption = this.options.graphicsMode();
+        GraphicsStatus requested = graphicsModeOption.get();
+        GraphicsStatus supported = GraphicsModeCompatibility.coerce(requested);
+
+        if(requested != supported) {
+            Initializer.LOGGER.error("{} graphics mode not supported, forcing {}", requested, supported);
+            graphicsModeOption.set(supported);
         }
     }
 
     @Inject(method = "runTick", at = @At(value = "HEAD"))
     private void resetBuffers(boolean bl, CallbackInfo ci) {
+        clampUnsupportedGraphicsMode();
         Renderer.getInstance().preInitFrame();
     }
 
-    //Main target (framebuffer) ops
     @Redirect(method = "runTick", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/systems/RenderSystem;clear(IZ)V"))
     private void beginRender(int i, boolean bl) {
         RenderSystem.clear(i, bl);
@@ -72,7 +88,6 @@ public class MinecraftMixin {
     private void removeBlit(RenderTarget instance, int i, int j) {
     }
 
-
     @Redirect(method = "runTick", at = @At(value = "INVOKE", target = "Ljava/lang/Thread;yield()V"))
     private void removeThreadYield() {
     }
@@ -94,11 +109,15 @@ public class MinecraftMixin {
         SpriteUtil.setDoUpload(j == n);
     }
 
+    @Redirect(method = "runTick", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Minecraft;tick()V"))
+    private void guardClientTick(Minecraft instance) {
+        ExternalClientFaultBoundary.runClientTick(instance);
+    }
+
     @Inject(method = "close", at = @At(value = "HEAD"))
     public void close(CallbackInfo ci) {
         Vulkan.waitIdle();
     }
-
 
     @Inject(method = "close", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/VirtualScreen;close()V"))
     public void close2(CallbackInfo ci) {
@@ -116,8 +135,16 @@ public class MinecraftMixin {
         Renderer.scheduleSwapChainUpdate();
     }
 
-    //Fixes crash when minimizing window before setScreen is called
     @Redirect(method = "setScreen", at = @At(value = "FIELD", target = "Lnet/minecraft/client/Minecraft;noRender:Z", opcode = Opcodes.PUTFIELD))
     private void keepVar(Minecraft instance, boolean value) { }
+
+    @Redirect(method = "setOverlay", at = @At(value = "INVOKE", target = "Lnet/neoforged/fml/loading/ImmediateWindowHandler;loadingOverlay(Ljava/util/function/Supplier;Ljava/util/function/Supplier;Ljava/util/function/Consumer;Z)Ljava/util/function/Supplier;", remap = false), require = 0)
+    private java.util.function.Supplier redirectLoadingOverlay(java.util.function.Supplier mc, java.util.function.Supplier rm, java.util.function.Consumer listener, boolean bl) {
+        if (net.vulkanmod.compat.EarlyWindowCompat.isHandoffComplete()) {
+            net.vulkanmod.Initializer.LOGGER.info("VulkanMod: Handoff is active, forcing vanilla LoadingOverlay instead of FML overlay.");
+            return mc;
+        }
+        return net.neoforged.fml.loading.ImmediateWindowHandler.loadingOverlay(mc, rm, listener, bl);
+    }
 
 }

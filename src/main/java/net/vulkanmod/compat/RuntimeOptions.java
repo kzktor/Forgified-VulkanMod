@@ -2,6 +2,7 @@ package net.vulkanmod.compat;
 
 public final class RuntimeOptions {
     public static final String DIAGNOSTICS_PROPERTY = "vulkanmod.diagnostics";
+    public static final String HUD_TRACE_PROPERTY = "vulkanmod.hudTrace";
     public static final String PROFILING_MIXINS_PROPERTY = "vulkanmod.profilingMixins";
     public static final String DEBUG_MIXINS_PROPERTY = "vulkanmod.debugMixins";
 
@@ -10,6 +11,10 @@ public final class RuntimeOptions {
 
     public static boolean diagnosticsEnabled() {
         return Boolean.getBoolean(DIAGNOSTICS_PROPERTY);
+    }
+
+    public static boolean hudTraceEnabled() {
+        return diagnosticsEnabled() && Boolean.getBoolean(HUD_TRACE_PROPERTY);
     }
 
     public static boolean profilingMixinsEnabled() {

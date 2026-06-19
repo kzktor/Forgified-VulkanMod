@@ -7,7 +7,7 @@ import net.vulkanmod.vulkan.texture.ImageUtil;
 import net.vulkanmod.vulkan.texture.VTextureSelector;
 import net.vulkanmod.vulkan.texture.VulkanImage;
 import net.vulkanmod.vulkan.util.ColorUtil;
-import org.lwjgl.system.MemoryUtil;
+import net.vulkanmod.vulkan.util.VUtil;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Overwrite;
@@ -26,7 +26,6 @@ public abstract class MNativeImage {
     @Shadow private long size;
 
     @Shadow public abstract void close();
-
 
     @Shadow @Final private NativeImage.Format format;
 
@@ -48,20 +47,17 @@ public abstract class MNativeImage {
     @Inject(method = "<init>(Lcom/mojang/blaze3d/platform/NativeImage$Format;IIZ)V", at = @At("RETURN"))
     private void constr(NativeImage.Format format, int width, int height, boolean useStb, CallbackInfo ci) {
         if(this.pixels != 0) {
-            buffer = MemoryUtil.memByteBuffer(this.pixels, (int)this.size);
+            buffer = VUtil.getByteBuffer(this.pixels, (int)this.size);
         }
     }
 
     @Inject(method = "<init>(Lcom/mojang/blaze3d/platform/NativeImage$Format;IIZJ)V", at = @At("RETURN"))
     private void constr(NativeImage.Format format, int width, int height, boolean useStb, long pixels, CallbackInfo ci) {
         if(this.pixels != 0) {
-            buffer = MemoryUtil.memByteBuffer(this.pixels, (int)this.size);
+            buffer = VUtil.getByteBuffer(this.pixels, (int)this.size);
         }
     }
 
-    /**
-     * @author
-     */
     @Overwrite
     private void _upload(int level, int xOffset, int yOffset, int unpackSkipPixels, int unpackSkipRows, int widthIn, int heightIn, boolean blur, boolean clamp, boolean mipmap, boolean autoClose) {
         RenderSystem.assertOnRenderThreadOrInit();
@@ -73,9 +69,6 @@ public abstract class MNativeImage {
         }
     }
 
-    /**
-     * @author
-     */
     @Overwrite
     public void downloadTexture(int level, boolean removeAlpha) {
         RenderSystem.assertOnRenderThread();
@@ -88,14 +81,13 @@ public abstract class MNativeImage {
             }
 
             for (long l = 0; l < this.width * this.height * 4L; l+=4) {
-                int v =  MemoryUtil.memGetInt(this.pixels + l);
+                int v =  VUtil.getInt(this.pixels + l);
 
-                //TODO
                 if(Vulkan.getSwapChain().isBGRAformat)
                     v = ColorUtil.BGRAtoRGBA(v);
 
                 v = v | 255 << this.format.alphaOffset();
-                MemoryUtil.memPutInt(this.pixels + l, v);
+                VUtil.putInt(this.pixels + l, v);
             }
         }
 

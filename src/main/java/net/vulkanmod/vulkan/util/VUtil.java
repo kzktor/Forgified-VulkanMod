@@ -118,4 +118,16 @@ public class VUtil {
         return r == 0 ? x : x + align - r;
     }
 
+    public static ByteBuffer getByteBuffer(long address, int capacity) {
+        return MemoryUtil.memByteBuffer(address, capacity);
+    }
+
+    public static int getInt(long address) {
+        return MemoryUtil.memGetInt(address);
+    }
+
+    public static void putInt(long address, int value) {
+        MemoryUtil.memPutInt(address, value);
+    }
+
 }

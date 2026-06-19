@@ -51,6 +51,17 @@ public class BuilderResources {
 
     public void clear() {
         builderPack.clearAll();
+        this.clearRegion();
+    }
+
+    public void clearRegion() {
+        this.region = null;
+        lightDataCache.clearWorld();
+    }
+
+    public void close() {
+        builderPack.closeAll();
+        this.clearRegion();
     }
 
     public void updateBuildStats(int buildTime) {

@@ -48,65 +48,37 @@ public class GL30M {
         vulkanmod$putZero(text);
     }
 
-    /**
-     * @author
-     * @reason
-     */
     @Overwrite(remap = false)
     public static void glGenerateMipmap(@NativeType("GLenum") int target) {
         GlTexture.generateMipmap(target);
     }
 
-    /**
-     * @author
-     * @reason
-     */
     @NativeType("void")
     @Overwrite(remap = false)
     public static int glGenFramebuffers() {
         return GlFramebuffer.genFramebufferId();
     }
 
-    /**
-     * @author
-     * @reason
-     */
     @Overwrite(remap = false)
     public static void glBindFramebuffer(@NativeType("GLenum") int target, @NativeType("GLuint") int framebuffer) {
         GlFramebuffer.bindFramebuffer(target, framebuffer);
     }
 
-    /**
-     * @author
-     * @reason
-     */
     @Overwrite(remap = false)
     public static void glFramebufferTexture2D(@NativeType("GLenum") int target, @NativeType("GLenum") int attachment, @NativeType("GLenum") int textarget, @NativeType("GLuint") int texture, @NativeType("GLint") int level) {
         GlFramebuffer.framebufferTexture2D(target, attachment, textarget, texture, level);
     }
 
-    /**
-     * @author
-     * @reason
-     */
     @Overwrite(remap = false)
     public static void glFramebufferRenderbuffer(@NativeType("GLenum") int target, @NativeType("GLenum") int attachment, @NativeType("GLenum") int renderbuffertarget, @NativeType("GLuint") int renderbuffer) {
         GlFramebuffer.framebufferRenderbuffer(target, attachment, renderbuffertarget, renderbuffer);
     }
 
-    /**
-     * @author
-     * @reason
-     */
     @Overwrite(remap = false)
     public static void glDeleteFramebuffers(@NativeType("GLuint const *") int framebuffer) {
         GlFramebuffer.deleteFramebuffer(framebuffer);
     }
 
-    /**
-     * @author
-     * @reason
-     */
     @Overwrite(remap = false)
     @NativeType("GLenum")
     public static int glCheckFramebufferStatus(@NativeType("GLenum") int target) {
@@ -123,40 +95,22 @@ public class GL30M {
         return GlFramebuffer.getFramebufferAttachmentParameteri(target, attachment, pname);
     }
 
-    //RENDER BUFFER
-
-    /**
-     * @author
-     * @reason
-     */
     @NativeType("void")
     @Overwrite(remap = false)
     public static int glGenRenderbuffers() {
         return GlRenderbuffer.genId();
     }
 
-    /**
-     * @author
-     * @reason
-     */
     @Overwrite(remap = false)
     public static void glBindRenderbuffer(@NativeType("GLenum") int target, @NativeType("GLuint") int framebuffer) {
         GlRenderbuffer.bindRenderbuffer(target, framebuffer);
     }
 
-    /**
-     * @author
-     * @reason
-     */
     @Overwrite(remap = false)
     public static void glRenderbufferStorage(@NativeType("GLenum") int target, @NativeType("GLenum") int internalformat, @NativeType("GLsizei") int width, @NativeType("GLsizei") int height) {
         GlRenderbuffer.renderbufferStorage(target, internalformat, width, height);
     }
 
-    /**
-     * @author
-     * @reason
-     */
     @Overwrite(remap = false)
     public static void glDeleteRenderbuffers(@NativeType("GLuint const *") int renderbuffer) {
         GlRenderbuffer.deleteRenderbuffer(renderbuffer);
@@ -249,7 +203,6 @@ public class GL30M {
     public static void glFlushMappedBufferRange(@NativeType("GLenum") int target, @NativeType("GLintptr") long offset, @NativeType("GLsizeiptr") long length) {
     }
 
-    // TODO: route to vkCmdBlitImage; dropping the blit keeps post-processing mods alive.
     @Overwrite(remap = false)
     public static void glBlitFramebuffer(@NativeType("GLint") int srcX0, @NativeType("GLint") int srcY0, @NativeType("GLint") int srcX1, @NativeType("GLint") int srcY1, @NativeType("GLint") int dstX0, @NativeType("GLint") int dstY0, @NativeType("GLint") int dstX1, @NativeType("GLint") int dstY1, @NativeType("GLbitfield") int mask, @NativeType("GLenum") int filter) {
         GlEmulationLog.warnContractGap("framebuffer_readback", "glBlitFramebuffer",

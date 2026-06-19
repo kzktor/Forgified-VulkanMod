@@ -5,6 +5,7 @@ import net.minecraft.client.renderer.texture.MissingTextureAtlasSprite;
 import net.vulkanmod.Initializer;
 import net.vulkanmod.gl.GlTexture;
 import net.vulkanmod.vulkan.shader.Pipeline;
+import net.vulkanmod.vulkan.shader.SamplerTextureSlot;
 import net.vulkanmod.vulkan.shader.descriptor.ImageDescriptor;
 
 import java.nio.ByteBuffer;
@@ -54,17 +55,7 @@ public abstract class VTextureSelector {
     }
 
     public static int getTextureIdx(String name) {
-        return switch (name) {
-            case "Sampler0", "DiffuseSampler" -> 0;
-            case "Sampler1" -> 1;
-            case "Sampler2" -> 2;
-            case "Sampler3" -> 3;
-            case "Sampler4" -> 4;
-            case "Sampler5" -> 5;
-            case "Sampler6" -> 6;
-            case "Sampler7" -> 7;
-            default -> throw new IllegalStateException("Unknown sampler name: " + name);
-        };
+        return SamplerTextureSlot.getTextureIdx(name);
     }
 
     public static void bindShaderTextures(Pipeline pipeline) {
@@ -79,8 +70,7 @@ public abstract class VTextureSelector {
                 VTextureSelector.bindTexture(state.imageIdx, texture.getVulkanImage());
             }
             else {
-                 texture = GlTexture.getTexture(MissingTextureAtlasSprite.getTexture().getId());
-                VTextureSelector.bindTexture(state.imageIdx, texture.getVulkanImage());
+                VTextureSelector.bindTexture(state.imageIdx, whiteTexture);
             }
         }
     }

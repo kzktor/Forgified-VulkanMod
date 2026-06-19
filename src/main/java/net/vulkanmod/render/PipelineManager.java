@@ -2,6 +2,7 @@ package net.vulkanmod.render;
 
 import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.renderer.RenderType;
+import net.vulkanmod.compat.external.ExternalRenderPathSupport;
 import net.vulkanmod.render.chunk.build.thread.ThreadBuilderPack;
 import net.vulkanmod.render.vertex.CustomVertexFormat;
 import net.vulkanmod.render.vertex.TerrainRenderType;
@@ -14,14 +15,14 @@ import java.util.function.Function;
 import static net.vulkanmod.vulkan.shader.SPIRVUtils.compileShaderAbsoluteFile;
 
 public abstract class PipelineManager {
-    private static final String shaderPath = SPIRVUtils.class.getResource("/assets/vulkanmod/shaders/").toExternalForm();
+    private static final String shaderPath = "/assets/vulkanmod/shaders/";
     public static VertexFormat TERRAIN_VERTEX_FORMAT;
 
     public static void setTerrainVertexFormat(VertexFormat format) {
         TERRAIN_VERTEX_FORMAT = format;
     }
 
-    static GraphicsPipeline terrainShaderEarlyZ, terrainShader, fastBlitPipeline;
+    static GraphicsPipeline terrainShaderEarlyZ, terrainShader, fastBlitPipeline, renderScaleBlitPipeline, externalLodPipeline;
 
     private static Function<TerrainRenderType, GraphicsPipeline> shaderGetter;
 
@@ -33,13 +34,17 @@ public abstract class PipelineManager {
     }
 
     public static void setDefaultShader() {
-        setShaderGetter(renderType -> renderType == TerrainRenderType.TRANSLUCENT ? terrainShaderEarlyZ : terrainShader);
+        setShaderGetter(renderType -> terrainShader);
     }
 
     private static void createBasicPipelines() {
-        terrainShaderEarlyZ = createPipeline("terrain","terrain", "terrain_Z", TERRAIN_VERTEX_FORMAT);
+        terrainShaderEarlyZ = createPipeline("terrain","terrain", "terrain_z", TERRAIN_VERTEX_FORMAT);
         terrainShader = createPipeline("terrain", "terrain", "terrain", TERRAIN_VERTEX_FORMAT);
         fastBlitPipeline = createPipeline("blit", "blit", "blit", CustomVertexFormat.NONE);
+        renderScaleBlitPipeline = createPipeline("render_scale_blit", "render_scale_blit", "render_scale_blit", CustomVertexFormat.NONE);
+        if (ExternalRenderPathSupport.shouldCreateExternalLodPipeline()) {
+            externalLodPipeline = createPipeline("external_lod", "lod", "lod", CustomVertexFormat.EXTERNAL_LOD);
+        }
     }
 
     private static GraphicsPipeline createPipeline(String baseName, String vertName, String fragName,VertexFormat vertexFormat) {
@@ -75,9 +80,17 @@ public abstract class PipelineManager {
 
     public static GraphicsPipeline getFastBlitPipeline() { return fastBlitPipeline; }
 
+    public static GraphicsPipeline getRenderScaleBlitPipeline() { return renderScaleBlitPipeline; }
+
+    public static GraphicsPipeline getExternalLodPipeline() { return externalLodPipeline; }
+
     public static void destroyPipelines() {
         terrainShaderEarlyZ.cleanUp();
         terrainShader.cleanUp();
         fastBlitPipeline.cleanUp();
+        renderScaleBlitPipeline.cleanUp();
+        if (externalLodPipeline != null) {
+            externalLodPipeline.cleanUp();
+        }
     }
 }

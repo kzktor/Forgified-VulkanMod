@@ -17,6 +17,7 @@ public abstract class ChunkTask {
     }
 
     protected AtomicBoolean cancelled = new AtomicBoolean(false);
+    private final AtomicBoolean started = new AtomicBoolean(false);
     protected final RenderSection section;
     public boolean highPriority = false;
 
@@ -28,14 +29,30 @@ public abstract class ChunkTask {
 
     public abstract Result runTask(BuilderResources builderResources);
 
+    public void markStarted() {
+        this.started.set(true);
+    }
+
     public void cancel() {
         this.cancelled.set(true);
+
+        if (!this.started.get()) {
+            this.clearPayload();
+        }
+    }
+
+    public void discard() {
+        this.cancelled.set(true);
+        this.clearPayload();
+    }
+
+    protected void clearPayload() {
     }
 
     public static void setTaskDispatcher(TaskDispatcher dispatcher) {
         taskDispatcher = dispatcher;
     }
-    
+
     public enum Result {
         CANCELLED,
         SUCCESSFUL

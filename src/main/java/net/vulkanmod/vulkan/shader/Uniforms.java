@@ -2,6 +2,8 @@ package net.vulkanmod.vulkan.shader;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import it.unimi.dsi.fastutil.objects.Object2ReferenceOpenHashMap;
+import net.vulkanmod.compat.external.ExternalRenderPathSupport;
+import net.vulkanmod.compat.external.ExternalTerrainRenderBridge;
 import net.vulkanmod.vulkan.VRenderSystem;
 import net.vulkanmod.vulkan.util.MappedBuffer;
 
@@ -20,17 +22,17 @@ public class Uniforms {
 
     public static void setupDefaultUniforms() {
 
-        //Mat4
         mat4f_uniformMap.put("ModelViewMat", VRenderSystem::getModelViewMatrix);
         mat4f_uniformMap.put("ProjMat", VRenderSystem::getProjectionMatrix);
         mat4f_uniformMap.put("MVP", VRenderSystem::getMVP);
         mat4f_uniformMap.put("TextureMat", VRenderSystem::getTextureMatrix);
+        if (ExternalRenderPathSupport.isExternalLodBridgeEnabled()) {
+            mat4f_uniformMap.put("ExternalLodCombinedMatrix", ExternalTerrainRenderBridge::getCombinedMatrix);
+        }
 
-        //Vec1i
         vec1i_uniformMap.put("EndPortalLayers", () -> 15);
         vec1i_uniformMap.put("FogShape", () -> RenderSystem.getShaderFogShape().getIndex());
 
-        //Vec1
         vec1f_uniformMap.put("FogStart", RenderSystem::getShaderFogStart);
         vec1f_uniformMap.put("FogEnd", RenderSystem::getShaderFogEnd);
         vec1f_uniformMap.put("LineWidth", RenderSystem::getShaderLineWidth);
@@ -38,17 +40,18 @@ public class Uniforms {
         vec1f_uniformMap.put("GlintAlpha", RenderSystem::getShaderGlintAlpha);
         vec1f_uniformMap.put("AlphaCutout", () -> VRenderSystem.alphaCutout);
 
-        //Vec2
         vec2f_uniformMap.put("ScreenSize", VRenderSystem::getScreenSize);
 
-        //Vec3
         vec3f_uniformMap.put("Light0_Direction", () -> VRenderSystem.lightDirection0);
         vec3f_uniformMap.put("Light1_Direction", () -> VRenderSystem.lightDirection1);
         vec3f_uniformMap.put("ChunkOffset", () -> VRenderSystem.ChunkOffset);
 
-        //Vec4
         vec4f_uniformMap.put("ColorModulator", VRenderSystem::getShaderColor);
         vec4f_uniformMap.put("FogColor", VRenderSystem::getShaderFogColor);
+        if (ExternalRenderPathSupport.isExternalLodBridgeEnabled()) {
+            vec4f_uniformMap.put("ExternalLodModelOffsetAndYOffset", ExternalTerrainRenderBridge::getModelOffsetAndYOffset);
+            vec4f_uniformMap.put("ExternalLodRenderParams", ExternalTerrainRenderBridge::getRenderParams);
+        }
 
     }
 }

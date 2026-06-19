@@ -4,6 +4,7 @@ import net.vulkanmod.vulkan.Renderer;
 import net.vulkanmod.vulkan.VRenderSystem;
 import net.vulkanmod.vulkan.Vulkan;
 import net.vulkanmod.vulkan.memory.MemoryManager;
+import net.vulkanmod.vulkan.texture.VulkanImage;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.*;
 
@@ -52,7 +53,6 @@ public class RenderPass {
 
             int i = 0;
 
-            // Color attachment
             if (colorAttachmentInfo != null) {
                 VkAttachmentDescription colorAttachment = attachments.get(i);
                 colorAttachment.format(colorAttachmentInfo.format)
@@ -74,15 +74,14 @@ public class RenderPass {
                 ++i;
             }
 
-            // Depth-Stencil attachment
             if (depthAttachmentInfo != null) {
                 VkAttachmentDescription depthAttachment = attachments.get(i);
                 depthAttachment.format(depthAttachmentInfo.format)
                         .samples(VK_SAMPLE_COUNT_1_BIT)
                         .loadOp(depthAttachmentInfo.loadOp)
                         .storeOp(depthAttachmentInfo.storeOp)
-                        .stencilLoadOp(VK_ATTACHMENT_LOAD_OP_DONT_CARE)
-                        .stencilStoreOp(VK_ATTACHMENT_STORE_OP_DONT_CARE)
+                        .stencilLoadOp(depthAttachmentInfo.loadOp)
+                        .stencilStoreOp(VK_ATTACHMENT_STORE_OP_STORE)
                         .initialLayout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
                         .finalLayout(depthAttachmentInfo.finalLayout);
 
@@ -98,7 +97,6 @@ public class RenderPass {
                     .pAttachments(attachments)
                     .pSubpasses(subpass);
 
-            //Layout transition subpass depency
             switch (colorAttachmentInfo.finalLayout) {
                 case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR -> {
                     VkSubpassDependency.Buffer subpassDependencies = VkSubpassDependency.calloc(1, stack);
@@ -157,7 +155,7 @@ public class RenderPass {
 
         VkClearValue.Buffer clearValues = VkClearValue.malloc(2, stack);
         clearValues.get(0).color().float32(VRenderSystem.clearColor);
-        clearValues.get(1).depthStencil().set(1.0f, 0);
+        clearValues.get(1).depthStencil().set(VRenderSystem.clearDepthValue, VRenderSystem.clearStencilValue);
 
         renderPassInfo.pClearValues(clearValues);
 
@@ -185,14 +183,13 @@ public class RenderPass {
 
         VkClearValue.Buffer clearValues = VkClearValue.malloc(2, stack);
         clearValues.get(0).color().float32(stack.floats(0.0f, 0.0f, 0.0f, 1.0f));
-        clearValues.get(1).depthStencil().set(1.0f, 0);
+        clearValues.get(1).depthStencil().set(VRenderSystem.clearDepthValue, VRenderSystem.clearStencilValue);
 
         VkRenderingInfo renderingInfo = VkRenderingInfo.calloc(stack);
         renderingInfo.sType(KHRDynamicRendering.VK_STRUCTURE_TYPE_RENDERING_INFO_KHR);
         renderingInfo.renderArea(renderArea);
         renderingInfo.layerCount(1);
 
-        // Color attachment
         if (colorAttachmentInfo != null) {
             VkRenderingAttachmentInfo.Buffer colorAttachment = VkRenderingAttachmentInfo.calloc(1, stack);
             colorAttachment.sType(KHRDynamicRendering.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR);
@@ -205,7 +202,6 @@ public class RenderPass {
             renderingInfo.pColorAttachments(colorAttachment);
         }
 
-        //Depth attachment
         if (depthAttachmentInfo != null) {
             VkRenderingAttachmentInfo depthAttachment = VkRenderingAttachmentInfo.calloc(stack);
             depthAttachment.sType(KHRDynamicRendering.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR);
@@ -216,6 +212,18 @@ public class RenderPass {
             depthAttachment.clearValue(clearValues.get(1));
 
             renderingInfo.pDepthAttachment(depthAttachment);
+
+            if (VulkanImage.hasStencilComponent(depthAttachmentInfo.format)) {
+                VkRenderingAttachmentInfo stencilAttachment = VkRenderingAttachmentInfo.calloc(stack);
+                stencilAttachment.sType(KHRDynamicRendering.VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR);
+                stencilAttachment.imageView(framebuffer.getDepthAttachment().getImageView());
+                stencilAttachment.imageLayout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+                stencilAttachment.loadOp(depthAttachmentInfo.loadOp);
+                stencilAttachment.storeOp(depthAttachmentInfo.storeOp);
+                stencilAttachment.clearValue(clearValues.get(1));
+
+                renderingInfo.pStencilAttachment(stencilAttachment);
+            }
         }
 
         KHRDynamicRendering.vkCmdBeginRenderingKHR(commandBuffer, renderingInfo);
@@ -230,7 +238,6 @@ public class RenderPass {
     }
 
     public void cleanUp() {
-        //TODO
 
         if (!Vulkan.DYNAMIC_RENDERING)
             MemoryManager.getInstance().addFrameOp(
@@ -318,7 +325,6 @@ public class RenderPass {
             if (depthAttachmentInfo != null) {
                 depthAttachmentInfo.setLoadOp(loadOp);
             }
-
 
             return this;
         }

@@ -1,6 +1,5 @@
 package net.vulkanmod.render.chunk.graph;
 
-import com.google.common.collect.Lists;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.culling.Frustum;
@@ -15,12 +14,10 @@ import net.vulkanmod.render.chunk.*;
 import net.vulkanmod.render.chunk.build.RenderRegionBuilder;
 import net.vulkanmod.render.chunk.build.TaskDispatcher;
 import net.vulkanmod.render.chunk.frustum.VFrustum;
+import net.vulkanmod.render.optimization.AdaptiveChunkUploadBudget;
 import net.vulkanmod.render.chunk.util.AreaSetQueue;
 import net.vulkanmod.render.chunk.util.ResettableQueue;
-import net.vulkanmod.render.profiling.Profiler;
 import org.joml.FrustumIntersection;
-
-import java.util.List;
 
 public class SectionGraph {
     Minecraft minecraft;
@@ -41,7 +38,6 @@ public class SectionGraph {
     public RenderRegionBuilder renderRegionCache;
     int nonEmptyChunks;
 
-
     public SectionGraph(Level level, SectionGrid sectionGrid, TaskDispatcher taskDispatcher) {
         this.level = level;
         this.sectionGrid = sectionGrid;
@@ -54,35 +50,39 @@ public class SectionGraph {
     }
 
     public void update(Camera camera, Frustum frustum, boolean spectator) {
-        Profiler profiler = Profiler.getMainProfiler();
-
         BlockPos blockpos = camera.getBlockPosition();
 
         this.minecraft.getProfiler().popPush("update");
 
-        boolean flag = this.minecraft.smartCull;
-        if (spectator && this.level.getBlockState(blockpos).isSolidRender(this.level, blockpos)) {
-            flag = false;
-        }
+        boolean spectatorInsideSolid = spectator && this.level.getBlockState(blockpos).isSolidRender(this.level, blockpos);
+        boolean flag = SectionTraversalPolicy.shouldUseDirectionalCulling(this.minecraft.smartCull, spectatorInsideSolid, this.level.dimensionType().hasSkyLight());
 
-        profiler.push("frustum");
         this.frustum = (((FrustumMixed) (frustum)).customFrustum()).offsetToFullyIncludeCameraCube(8);
         this.sectionGrid.updateFrustumVisibility(this.frustum);
-        profiler.pop();
 
         this.minecraft.getProfiler().push("partial_update");
 
         this.initUpdate();
         this.initializeQueueForFullUpdate(camera);
 
-        if (flag)
+        if (flag) {
             this.updateRenderChunks();
-        else
+            if (this.nonEmptyChunks == 0) {
+                retryWithoutDirectionalCulling(camera);
+            }
+        } else {
             this.updateRenderChunksSpectator();
+        }
 
         this.scheduleRebuilds();
 
         this.minecraft.getProfiler().pop();
+    }
+
+    private void retryWithoutDirectionalCulling(Camera camera) {
+        this.initUpdate();
+        this.initializeQueueForFullUpdate(camera);
+        this.updateRenderChunksSpectator();
     }
 
     private void initializeQueueForFullUpdate(Camera camera) {
@@ -96,23 +96,21 @@ public class SectionGraph {
             int x = Mth.floor(vec3.x / 16.0D) * 16;
             int z = Mth.floor(vec3.z / 16.0D) * 16;
 
-            List<RenderSection> list = Lists.newArrayList();
             int renderDistance = WorldRenderer.getInstance().getRenderDistance();
+            int side = renderDistance * 2 + 1;
+
+            this.sectionQueue.ensureCapacity(side * side);
 
             for (int x1 = -renderDistance; x1 <= renderDistance; ++x1) {
                 for (int z1 = -renderDistance; z1 <= renderDistance; ++z1) {
 
-                    RenderSection renderSection1 = this.sectionGrid.getSectionAtBlockPos(new BlockPos(x + SectionPos.sectionToBlockCoord(x1, 8), y, z + SectionPos.sectionToBlockCoord(z1, 8)));
+                    RenderSection renderSection1 = this.sectionGrid.getSectionAtBlockPos(
+                            x + SectionPos.sectionToBlockCoord(x1, 8), y, z + SectionPos.sectionToBlockCoord(z1, 8));
                     if (renderSection1 != null) {
                         initFirstNode(renderSection1, this.lastFrame);
-                        list.add(renderSection1);
+                        this.sectionQueue.add(renderSection1);
                     }
                 }
-            }
-
-            this.sectionQueue.ensureCapacity(list.size());
-            for (RenderSection chunkInfo : list) {
-                this.sectionQueue.add(chunkInfo);
             }
 
         } else {
@@ -128,13 +126,14 @@ public class SectionGraph {
         renderSection.sourceDirs = (byte) (1 << 7);
         renderSection.directions = (byte) 0xFF;
         renderSection.setLastFrame(frame);
-        renderSection.visibility |= initVisibility();
+        renderSection.visibility |= INIT_VISIBILITY;
         renderSection.directionChanges = 0;
         renderSection.steps = 0;
     }
 
-    // Init special value used by first graph node
-    private static long initVisibility() {
+    private static final long INIT_VISIBILITY = computeInitVisibility();
+
+    private static long computeInitVisibility() {
         long vis = 0;
         for (int dir = 0; dir < 6; dir++) {
             vis |= 1L << ((6 << 3) + dir);
@@ -194,12 +193,22 @@ public class SectionGraph {
     }
 
     private void scheduleRebuilds() {
-        for (int i = 0; i < this.rebuildQueue.size(); i++) {
+        int maxScheduledRebuilds = AdaptiveChunkUploadBudget.chooseRebuildScheduleBudget(this.rebuildQueue.size());
+        int scheduledRebuilds = 0;
+
+        for (int i = 0; i < this.rebuildQueue.size() && scheduledRebuilds < maxScheduledRebuilds; i++) {
             RenderSection section = this.rebuildQueue.get(i);
 
-            section.rebuildChunkAsync(this.taskDispatcher, this.renderRegionCache);
-            section.setNotDirty();
+            if (section.rebuildChunkAsync(this.taskDispatcher, this.renderRegionCache)) {
+                section.setNotDirty();
+                scheduledRebuilds++;
+            }
         }
+
+        if (scheduledRebuilds < this.rebuildQueue.size()) {
+            WorldRenderer.getInstance().scheduleGraphUpdate();
+        }
+
         this.rebuildQueue.clear();
     }
 
@@ -316,6 +325,10 @@ public class SectionGraph {
         String tasksInfo = this.taskDispatcher == null ? "null" : this.taskDispatcher.getStats();
 
         return String.format("Chunks: %d(%d)/%d D: %d, %s", this.nonEmptyChunks, sections, totalSections, renderDistance, tasksInfo);
+    }
+
+    public VFrustum getFrustum() {
+        return this.frustum;
     }
 }
 

@@ -13,34 +13,44 @@ import java.nio.file.Path;
 import java.util.Collections;
 
 public class Config {
-
     public int frameQueueSize = 2;
     public VideoModeSet.VideoMode videoMode = VideoModeManager.getFirstAvailable().getVideoMode();
     public boolean windowedFullscreen = false;
+    public int performancePreset = PerformancePreset.BALANCED.id;
+    public int chunkUploadsPerFrame = PerformancePreset.BALANCED.chunkUploadsPerFrame;
+    public boolean adaptiveChunkUploads = true;
+    public int renderScale = RenderScale.DEFAULT;
 
     public int advCulling = 2;
-    public boolean indirectDraw = false;
+
+    public boolean indirectDraw = true;
 
     public boolean uniqueOpaqueLayer = true;
     public boolean entityCulling = true;
+    public boolean blockEntityCulling = true;
+    public boolean leavesCulling = true;
+    public int particleCulling = 2;
     public int device = -1;
 
     public int ambientOcclusion = 1;
+    public boolean textureAnimations = true;
 
     public void write() {
 
-        if(!Files.exists(CONFIG_PATH.getParent())) {
+        Path parent = CONFIG_PATH.getParent();
+        if(parent != null && !Files.exists(parent)) {
             try {
-                Files.createDirectories(CONFIG_PATH);
+                Files.createDirectories(parent);
             } catch (IOException e) {
-                e.printStackTrace();
+                System.err.println("[VulkanMod] Failed to create config directory: " + parent + " - " + e.getMessage());
+                return;
             }
         }
 
         try {
             Files.write(CONFIG_PATH, Collections.singleton(GSON.toJson(this)));
         } catch (IOException e) {
-            e.printStackTrace();
+            System.err.println("[VulkanMod] Failed to write config: " + CONFIG_PATH + " - " + e.getMessage());
         }
     }
 

@@ -55,7 +55,6 @@ public abstract class BufferBuilderM
             this.light(light);
             this.fastNormal(packedNormal);
 
-//            throw new RuntimeException("unaccepted format: " + this.format);
         }
 
     }
@@ -117,9 +116,6 @@ public abstract class BufferBuilderM
         }
     }
 
-    /**
-     * @author
-     */
     @Overwrite
     public void addVertex(float x, float y, float z, int color, float u, float v, int overlay, int light, float normalX, float normalY, float normalZ) {
         if (this.fastFormat) {
@@ -133,18 +129,16 @@ public abstract class BufferBuilderM
             MemoryUtil.memPutFloat(ptr + 16, u);
             MemoryUtil.memPutFloat(ptr + 20, v);
 
-            byte i;
+            byte offset;
             if (this.fullFormat) {
                 MemoryUtil.memPutInt(ptr + 24, overlay);
-                i = 28;
+                offset = 28;
             } else {
-                i = 24;
+                offset = 24;
             }
 
-            MemoryUtil.memPutInt(ptr + i, light);
-
-            int temp = VertexUtil.packNormal(normalX, normalY, normalZ);
-            MemoryUtil.memPutInt(ptr + i + 4, temp);
+            MemoryUtil.memPutInt(ptr + offset, light);
+            MemoryUtil.memPutInt(ptr + offset + 4, VertexUtil.packNormal(normalX, normalY, normalZ));
         } else {
             VertexConsumer.super.addVertex(x, y, z, color, u, v, overlay, light, normalX, normalY, normalZ);
         }

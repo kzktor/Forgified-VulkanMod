@@ -47,8 +47,6 @@ public class GL12M {
         GlDrawContract.drawElements(mode, indices != null ? indices.remaining() : 0, GL12C.GL_UNSIGNED_INT, 0L);
     }
 
-    // 3D/array texture payloads are not uploaded yet, but dimensions and format
-    // are recorded so state probes after allocation behave like GL.
     @Overwrite(remap = false)
     public static void glTexImage3D(@NativeType("GLenum") int target, @NativeType("GLint") int level, @NativeType("GLint") int internalformat, @NativeType("GLsizei") int width, @NativeType("GLsizei") int height, @NativeType("GLsizei") int depth, @NativeType("GLint") int border, @NativeType("GLenum") int format, @NativeType("GLenum") int type, @NativeType("void const *") @Nullable ByteBuffer pixels) {
         GlTexture.texImage3D(target, level, internalformat, width, height, depth, border, format, type);

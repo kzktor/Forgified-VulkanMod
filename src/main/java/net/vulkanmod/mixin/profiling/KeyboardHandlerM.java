@@ -21,7 +21,16 @@ public class KeyboardHandlerM {
         if(InputConstants.isKeyDown(Minecraft.getInstance().getWindow().getWindow(), GLFW.GLFW_KEY_LEFT_ALT)) {
             switch (key) {
                 case GLFW.GLFW_KEY_F8 -> ProfilerOverlay.toggle();
-                case GLFW.GLFW_KEY_F10 -> BuildTimeProfiler.startBench();
+                case GLFW.GLFW_KEY_F10 -> {
+                    if (!net.vulkanmod.compat.observer.CompatProfiler.isBenchmarking()) {
+                        if (!net.vulkanmod.compat.observer.CompatProfiler.hasBaseline()) {
+                            net.vulkanmod.compat.observer.CompatProfiler.startBenchmark(false);
+                        } else {
+                            net.vulkanmod.compat.observer.CompatProfiler.startBenchmark(true);
+                        }
+                    }
+                    BuildTimeProfiler.startBench();
+                }
             }
         }
         else if(ProfilerOverlay.shouldRender) {

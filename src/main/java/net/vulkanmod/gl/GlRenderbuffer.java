@@ -33,8 +33,12 @@ public class GlRenderbuffer {
         if (id <= 0)
             return;
 
-        if (bound == null)
-            throw new NullPointerException("bound texture is null");
+        if (bound == null) {
+            bound = new GlRenderbuffer(id);
+            map.put(id, bound);
+            if (id >= ID_COUNTER)
+                ID_COUNTER = id + 1;
+        }
 
         VulkanImage vulkanImage = bound.vulkanImage;
         if (vulkanImage != null)
@@ -53,14 +57,39 @@ public class GlRenderbuffer {
         if (width == 0 || height == 0)
             return;
 
+        if (bound == null) {
+            GlEmulationLog.warnOnce("renderbufferStorage.unbound", "glRenderbufferStorage without a bound renderbuffer; allocation skipped");
+            return;
+        }
+
         bound.internalFormat = internalFormat;
 
         bound.allocateIfNeeded(width, height, internalFormat);
     }
 
+    public static void namedRenderbufferStorage(int renderbuffer, int internalFormat, int width, int height) {
+        int previous = boundId;
+        bindRenderbuffer(GL30.GL_RENDERBUFFER, renderbuffer);
+        try {
+            renderbufferStorage(GL30.GL_RENDERBUFFER, internalFormat, width, height);
+        } finally {
+            bindRenderbuffer(GL30.GL_RENDERBUFFER, previous);
+        }
+    }
+
+    public static void namedRenderbufferStorageMultisample(int renderbuffer, int samples, int internalFormat, int width, int height) {
+        namedRenderbufferStorage(renderbuffer, internalFormat, width, height);
+    }
+
     public static void texParameteri(int target, int pName, int param) {
-        if (target != GL11.GL_TEXTURE_2D)
-            throw new UnsupportedOperationException();
+        if (target != GL11.GL_TEXTURE_2D) {
+            GlEmulationLog.warnOnce("renderbuffer.texParameteri.target." + target,
+                    "Renderbuffer texParameteri target 0x{} is not emulated; parameter ignored", Integer.toHexString(target));
+            return;
+        }
+
+        if (bound == null)
+            return;
 
         switch (pName) {
             case GL30.GL_TEXTURE_MAX_LEVEL -> bound.setMaxLevel(param);
@@ -75,7 +104,6 @@ public class GlRenderbuffer {
             }
         }
 
-        //TODO
     }
 
     public static int getTexLevelParameter(int target, int level, int pName) {
@@ -92,20 +120,36 @@ public class GlRenderbuffer {
     }
 
     public static void generateMipmap(int target) {
-        if (target != GL11.GL_TEXTURE_2D)
-            throw new UnsupportedOperationException();
+        if (target != GL11.GL_TEXTURE_2D) {
+            GlEmulationLog.warnOnce("renderbuffer.generateMipmap.target." + target,
+                    "Renderbuffer generateMipmap target 0x{} is not emulated; call ignored", Integer.toHexString(target));
+            return;
+        }
+
+        if (bound == null || bound.vulkanImage == null)
+            return;
 
         bound.generateMipmaps();
     }
 
     public static void setVulkanImage(int id, VulkanImage vulkanImage) {
         GlRenderbuffer texture = map.get(id);
+        if (texture == null) {
+            texture = new GlRenderbuffer(id);
+            map.put(id, texture);
+            if (id >= ID_COUNTER)
+                ID_COUNTER = id + 1;
+        }
 
         texture.vulkanImage = vulkanImage;
     }
 
     public static GlRenderbuffer getBound() {
         return bound;
+    }
+
+    public static int getBoundId() {
+        return boundId;
     }
 
     final int id;
@@ -185,13 +229,12 @@ public class GlRenderbuffer {
     }
 
     void generateMipmaps() {
-        //TODO test
+
         ImageUtil.generateMipmaps(vulkanImage);
     }
 
     void setMaxLevel(int l) {
-        if (l < 0)
-            throw new IllegalStateException("max level cannot be < 0.");
+        l = Math.max(l, 0);
 
         if (maxLevel != l) {
             maxLevel = l;
@@ -200,8 +243,7 @@ public class GlRenderbuffer {
     }
 
     void setMaxLod(int l) {
-        if (l < 0)
-            throw new IllegalStateException("max level cannot be < 0.");
+        l = Math.max(l, 0);
 
         if (maxLod != l) {
             maxLod = l;
@@ -214,7 +256,10 @@ public class GlRenderbuffer {
             case GL11.GL_LINEAR, GL11.GL_NEAREST -> {
             }
 
-            default -> throw new IllegalArgumentException("illegal mag filter value: " + v);
+            default -> {
+                GlEmulationLog.warnOnce("renderbuffer.magFilter." + v, "Unsupported mag filter 0x{}; keeping previous value", Integer.toHexString(v));
+                return;
+            }
         }
 
         this.magFilter = v;
@@ -228,7 +273,10 @@ public class GlRenderbuffer {
                  GL11.GL_LINEAR_MIPMAP_NEAREST, GL11.GL_NEAREST_MIPMAP_NEAREST -> {
             }
 
-            default -> throw new IllegalArgumentException("illegal min filter value: " + v);
+            default -> {
+                GlEmulationLog.warnOnce("renderbuffer.minFilter." + v, "Unsupported min filter 0x{}; keeping previous value", Integer.toHexString(v));
+                return;
+            }
         }
 
         this.minFilter = v;

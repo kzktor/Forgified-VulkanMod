@@ -162,7 +162,6 @@ public class GL32M {
         return GlSync.getSynci(sync, pname);
     }
 
-    // baseVertex offsets are not applied; external render paths do not use them.
     @Overwrite(remap = false)
     public static void glDrawElementsBaseVertex(@NativeType("GLenum") int mode, @NativeType("GLsizei") int count, @NativeType("GLenum") int type, @NativeType("void const *") long indices, @NativeType("GLint") int basevertex) {
         if (basevertex == 0) {

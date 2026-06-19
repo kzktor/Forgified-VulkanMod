@@ -35,6 +35,10 @@ public class Uniform {
         this.values = supplier;
     }
 
+    public boolean hasSupplier() {
+        return this.values != null;
+    }
+
     public String getName() {
         return this.info.name;
     }
@@ -65,7 +69,6 @@ public class Uniform {
         return String.format("%s: %s offset: %d", info.type, info.name, info.offset);
     }
 
-    //TODO
     public static Info createUniformInfo(String type, String name, int count) {
         return switch (type) {
             case "matrix4x4" -> new Info("mat4", name, 4, 16);

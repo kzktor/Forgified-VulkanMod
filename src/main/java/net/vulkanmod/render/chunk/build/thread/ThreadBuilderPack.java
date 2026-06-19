@@ -38,4 +38,9 @@ public class ThreadBuilderPack {
         this.builders.values().forEach(TerrainBufferBuilder::clear);
     }
 
+    public void closeAll() {
+        this.builders.values().forEach(TerrainBufferBuilder::close);
+        this.builders.clear();
+    }
+
 }

@@ -151,9 +151,15 @@ public class AutoIndexBuffer {
 
         int j = 0;
         for (int i = 0; i < vertexCount - 2; ++i) {
-            idxs.put(j + 0, (short) i);
-            idxs.put(j + 1, (short) (i + 1));
-            idxs.put(j + 2, (short) (i + 2));
+            if ((i & 1) == 0) {
+                idxs.put(j + 0, (short) i);
+                idxs.put(j + 1, (short) (i + 1));
+                idxs.put(j + 2, (short) (i + 2));
+            } else {
+                idxs.put(j + 0, (short) (i + 1));
+                idxs.put(j + 1, (short) i);
+                idxs.put(j + 2, (short) (i + 2));
+            }
 
             j += 3;
         }
@@ -194,7 +200,7 @@ public class AutoIndexBuffer {
         TRIANGLE_STRIP(5),
         DEBUG_LINE_STRIP(4),
         DEBUG_LINES(3),
-        LINES(1); // Emulates lines with quads
+        LINES(1);
 
         public final int n;
 

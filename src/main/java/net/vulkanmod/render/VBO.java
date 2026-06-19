@@ -3,8 +3,8 @@ package net.vulkanmod.render;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.VertexFormat;
-import net.fabricmc.api.EnvType;
-import net.fabricmc.api.Environment;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.api.distmarker.OnlyIn;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.vulkanmod.interfaces.ShaderMixed;
 import net.vulkanmod.vulkan.Renderer;
@@ -20,7 +20,7 @@ import org.joml.Matrix4f;
 
 import java.nio.ByteBuffer;
 
-@Environment(EnvType.CLIENT)
+@OnlyIn(Dist.CLIENT)
 public class VBO {
     private VertexBuffer vertexBuffer;
     private IndexBuffer indexBuffer;
@@ -28,6 +28,7 @@ public class VBO {
     private int indexCount;
     private int vertexCount;
     private VertexFormat.Mode mode;
+    private VertexFormat format;
 
     private boolean autoIndexed = false;
 
@@ -39,6 +40,7 @@ public class VBO {
         this.indexCount = parameters.indexCount();
         this.vertexCount = parameters.vertexCount();
         this.mode = parameters.mode();
+        this.format = parameters.format();
 
         this.uploadVertexBuffer(parameters, meshData.vertexBuffer());
         this.uploadIndexBuffer(meshData.indexBuffer());
@@ -65,7 +67,11 @@ public class VBO {
                     autoIndexBuffer = Renderer.getDrawer().getTriangleFanIndexBuffer();
                     this.indexCount = AutoIndexBuffer.DrawType.getTriangleStripIndexCount(this.vertexCount);
                 }
-                case TRIANGLE_STRIP, LINE_STRIP -> {
+                case TRIANGLE_STRIP -> {
+                    autoIndexBuffer = Renderer.getDrawer().getTriangleStripIndexBuffer();
+                    this.indexCount = AutoIndexBuffer.DrawType.getTriangleStripIndexCount(this.vertexCount);
+                }
+                case LINE_STRIP -> {
                     autoIndexBuffer = Renderer.getDrawer().getTriangleStripIndexBuffer();
                     this.indexCount = AutoIndexBuffer.DrawType.getTriangleStripIndexCount(this.vertexCount);
                 }
@@ -110,18 +116,21 @@ public class VBO {
 
             RenderSystem.setShader(() -> shader);
 
-            drawWithShader(MV, P, ((ShaderMixed) shader).getPipeline());
+            drawWithShader(MV, P, ((ShaderMixed) shader).getPipeline(this.format));
 
         }
     }
 
     public void drawWithShader(Matrix4f MV, Matrix4f P, GraphicsPipeline pipeline) {
         if (this.indexCount != 0) {
+            if (pipeline == null) {
+                return;
+            }
             RenderSystem.assertOnRenderThread();
 
             VRenderSystem.applyMVP(MV, P);
 
-            VRenderSystem.setPrimitiveTopologyGL(this.mode.asGLMode);
+            VRenderSystem.setPrimitiveTopology(this.mode);
 
             Renderer renderer = Renderer.getInstance();
             renderer.bindGraphicsPipeline(pipeline);
@@ -164,6 +173,7 @@ public class VBO {
 
         this.vertexCount = 0;
         this.indexCount = 0;
+        this.format = null;
     }
 
 }

@@ -1,109 +1,190 @@
 plugins {
-	id 'fabric-loom' version '1.6.11'
-	id 'maven-publish'
+    id 'java-library'
+    id 'maven-publish'
+    id 'net.neoforged.moddev' version '2.0.141'
 }
 
 version = project.mod_version
 group = project.maven_group
 
 base {
-	archivesName = project.archives_base_name
+    archivesName = project.archives_base_name
 }
 
-loom {
-	accessWidenerPath = file("src/main/resources/vulkanmod.accesswidener")
-}
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
-dependencies {
-	// To change the versions see the gradle.properties file
-	minecraft "com.mojang:minecraft:${project.minecraft_version}"
-	mappings loom.officialMojangMappings()
-	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+neoForge {
+    version = project.neo_version
 
-	// Fabric API. This is technically optional, but you probably want it anyway.
-	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    parchment {
+        mappingsVersion = project.parchment_mappings_version
+        minecraftVersion = project.parchment_minecraft_version
+    }
 
-	// Needed in order to load mod namespace
-	ext.includeModule = { name ->
-		var module = fabricApi.module(name, project.fabric_version)
-		modImplementation(module)
-		include(module)
-	}
+    accessTransformers.from("src/main/resources/META-INF/accesstransformer.cfg")
 
-	includeModule("fabric-api-base")
-	includeModule("fabric-resource-loader-v0")
-	includeModule("fabric-rendering-fluids-v1")
-	includeModule("fabric-rendering-v1")
+    runs {
+        client {
+            client()
+            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+            systemProperty 'fml.earlydisplay', 'true'
+            systemProperty 'org.lwjgl.util.Debug', 'false'
+            systemProperty 'org.lwjgl.util.DebugAllocator', 'false'
+            systemProperty 'vulkanmod.debug.equivalence', System.getProperty('vulkanmod.debug.equivalence', 'false')
+            systemProperty 'vulkanmod.smoke.autoshot', System.getProperty('vulkanmod.smoke.autoshot', 'false')
+            systemProperty 'vulkanmod.compat.externalLod', System.getProperty('vulkanmod.compat.externalLod', 'off')
+            systemProperty 'vulkanmod.compat.externalLod.draw', System.getProperty('vulkanmod.compat.externalLod.draw', 'true')
+            systemProperty 'vulkanmod.compat.externalLod.debugDraw', System.getProperty('vulkanmod.compat.externalLod.debugDraw', 'false')
+            jvmArguments.add('-ea')
+            jvmArguments.add('-XX:+UseZGC')
+            jvmArguments.add('-XX:SoftMaxHeapSize=1536m')
+            // Opt-in for unattended smoke tests: jump straight into a world.
+            if (System.getProperty('vulkanmod.smoke.quickplay') != null) {
+                programArguments.addAll '--quickPlaySingleplayer', System.getProperty('vulkanmod.smoke.quickplay')
+            }
+        }
+
+        server {
+            server()
+            programArgument '--nogui'
+            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+        }
+
+        data {
+            data()
+            programArguments.addAll '--mod', project.mod_id, '--all', '--output', file('src/generated/resources/').getAbsolutePath(), '--existing', file('src/main/resources/').getAbsolutePath()
+        }
+    }
+
+    mods {
+        vulkanmod {
+            sourceSet sourceSets.main
+        }
+    }
 }
 
 project.ext.lwjglVersion = "3.3.3"
-project.ext.jomlVersion = "1.10.4"
 project.ext.winNatives = "natives-windows"
-project.ext.linuxNatives = "natives-linux"
-project.ext.macosNatives = "natives-macos"
-project.ext.macosArmNatives = "natives-macos-arm64"
 
 dependencies {
-	include(implementation("org.lwjgl:lwjgl-vulkan:$lwjglVersion"))
+    // Standard LWJGL for Vulkan
+    implementation "org.lwjgl:lwjgl-vulkan:$lwjglVersion"
+    implementation "org.lwjgl:lwjgl-shaderc:$lwjglVersion"
+    implementation "org.lwjgl:lwjgl-vma:$lwjglVersion"
 
-	ext.includeNatives = { name ->
-		include(implementation("$name:$lwjglVersion"))
-		include(runtimeOnly("$name:$lwjglVersion:$winNatives"))
-		include(runtimeOnly("$name:$lwjglVersion:$linuxNatives"))
-		include(runtimeOnly("$name:$lwjglVersion:$macosNatives"))
-		include(runtimeOnly("$name:$lwjglVersion:$macosArmNatives"))
-	}
+    runtimeOnly "org.lwjgl:lwjgl-shaderc:$lwjglVersion:$winNatives"
+    runtimeOnly "org.lwjgl:lwjgl-vma:$lwjglVersion:$winNatives"
 
-	includeNatives("org.lwjgl:lwjgl-vma")
-	includeNatives("org.lwjgl:lwjgl-shaderc")
+    // Add to runtime classpath for Dev Runs
+    additionalRuntimeClasspath "org.lwjgl:lwjgl-vulkan:$lwjglVersion"
+    additionalRuntimeClasspath "org.lwjgl:lwjgl-shaderc:$lwjglVersion"
+    additionalRuntimeClasspath "org.lwjgl:lwjgl-vma:$lwjglVersion"
+    additionalRuntimeClasspath "org.lwjgl:lwjgl-shaderc:$lwjglVersion:$winNatives"
+    additionalRuntimeClasspath "org.lwjgl:lwjgl-vma:$lwjglVersion:$winNatives"
 
-	//MoltenVK
-	include(runtimeOnly("org.lwjgl:lwjgl-vulkan:$lwjglVersion:$macosNatives"))
-	include(runtimeOnly("org.lwjgl:lwjgl-vulkan:$lwjglVersion:$macosArmNatives"))
+    // Bundle them for production via JarJar
+    jarJar "org.lwjgl:lwjgl-vulkan:$lwjglVersion"
+    jarJar "org.lwjgl:lwjgl-shaderc:$lwjglVersion"
+    jarJar "org.lwjgl:lwjgl-vma:$lwjglVersion"
+    jarJar "org.lwjgl:lwjgl-shaderc:$lwjglVersion:$winNatives"
+    jarJar "org.lwjgl:lwjgl-vma:$lwjglVersion:$winNatives"
+
+    // Flywheel backend SPI (runtime ships inside Create's jar-in-jar; compile against the same version)
+    compileOnly files("libs/flywheel-neoforge-1.21.1-1.0.6.jar")
 }
 
-processResources {
-	inputs.property "version", project.version
+// Ensure JarJar only contains what we want
+configurations.jarJar {
+    exclude group: 'org.lwjgl', module: 'lwjgl'
+    exclude group: 'org.lwjgl', module: 'lwjgl-glfw'
+    exclude group: 'org.lwjgl', module: 'lwjgl-opengl'
+    exclude group: 'org.lwjgl', module: 'lwjgl-stb'
+}
 
-	filesMatching("fabric.mod.json") {
-		expand "version": project.version
-	}
+
+processResources {
+    inputs.property "version", project.version
+
+    filesMatching("META-INF/neoforge.mods.toml") {
+        expand "version": project.version
+    }
 }
 
 tasks.withType(JavaCompile).configureEach {
-	it.options.release = 21
+    it.options.release = 21
 }
 
-java {
-	// Loom will automatically attach sourcesJar to a RemapSourcesJar task and to the "build" task
-	// if it is present.
-	// If you remove this line, sources will not be generated.
-	withSourcesJar()
 
-	sourceCompatibility = JavaVersion.VERSION_21
-	targetCompatibility = JavaVersion.VERSION_21
+java {
+    withSourcesJar()
 }
 
 jar {
-	from("LICENSE") {
-		rename { "${it}_${project.base.archivesName.get()}"}
-	}
+    from("LICENSE") {
+        rename { "${it}_${project.base.archivesName.get()}"}
+    }
+    from("COPYING") {
+        rename { "${it}_${project.base.archivesName.get()}"}
+    }
+    from("NOTICE") {
+        rename { "${it}_${project.base.archivesName.get()}"}
+    }
 }
 
-// configure the maven publication
 publishing {
-	publications {
-		create("mavenJava", MavenPublication) {
-			artifactId = project.archives_base_name
-			from components.java
-		}
-	}
+    publications {
+        create("mavenJava", MavenPublication) {
+            artifactId = project.archives_base_name
+            from components.java
+        }
+    }
+}
 
-	// See https://docs.gradle.org/current/userguide/publishing_maven.html for information on how to set up publishing.
-	repositories {
-		// Add repositories to publish to here.
-		// Notice: This block does NOT have the same function as the block in the top level.
-		// The repositories here will be used for publishing your artifact, not for
-		// retrieving dependencies.
-	}
+// Post-process: strip module-info.class from embedded LWJGL JarJar jars.
+// Without this, lwjgl-vulkan ends up in its own JPMS module layer,
+// invisible to org.lwjgl.glfw in the boot layer, causing:
+//   NoClassDefFoundError: org/lwjgl/vulkan/VkInstance
+tasks.named('jar') {
+    doLast {
+        def jarFile = archiveFile.get().asFile
+        def tmpDir = new File(temporaryDir, "repack")
+
+        // Extract the fat jar
+        tmpDir.deleteDir()
+        tmpDir.mkdirs()
+        ant.unzip(src: jarFile, dest: tmpDir)
+
+        // Strip module-info.class from each embedded LWJGL jar
+        def jarjarDir = new File(tmpDir, "META-INF/jarjar")
+        if (jarjarDir.exists()) {
+            jarjarDir.listFiles().findAll { it.name.endsWith('.jar') && it.name.startsWith('lwjgl-') }.each { embeddedJar ->
+                def stripped = new File(temporaryDir, "stripped-${embeddedJar.name}")
+                ant.zip(destfile: stripped) {
+                    zipfileset(src: embeddedJar) {
+                        exclude(name: 'module-info.class')
+                        exclude(name: 'META-INF/versions/*/module-info.class')
+                    }
+                }
+                embeddedJar.delete()
+                stripped.renameTo(embeddedJar)
+            }
+
+            // Fix metadata.json because NeoForge JarJar generates duplicate identifiers for natives
+            def metadataFile = new File(jarjarDir, "metadata.json")
+            if (metadataFile.exists()) {
+                def slurper = new groovy.json.JsonSlurper()
+                def metadata = slurper.parseText(metadataFile.text)
+                metadata.jars.each { jarEntry ->
+                    if (jarEntry.path.contains("-natives-")) {
+                        jarEntry.identifier.artifact += "-natives"
+                    }
+                }
+                metadataFile.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(metadata))
+            }
+        }
+
+        // Repack
+        jarFile.delete()
+        ant.zip(destfile: jarFile, basedir: tmpDir)
+    }
 }

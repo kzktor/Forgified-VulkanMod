@@ -4,6 +4,7 @@ import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.platform.Window;
 
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.Minecraft;
 import net.vulkanmod.vulkan.device.DeviceManager;
 import net.vulkanmod.vulkan.shader.PipelineState;
@@ -27,8 +28,18 @@ public abstract class VRenderSystem {
     public static boolean depthTest = true;
     public static boolean depthMask = true;
     public static int depthFun = 515;
+    public static boolean stencilTest = false;
+    public static int stencilFunc = GL11.GL_ALWAYS;
+    public static int stencilRef = 0;
+    public static int stencilFuncMask = 0xFF;
+    public static int stencilFailOp = GL11.GL_KEEP;
+    public static int stencilDepthFailOp = GL11.GL_KEEP;
+    public static int stencilPassOp = GL11.GL_KEEP;
+    public static int stencilWriteMask = 0xFF;
     public static int topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     public static int polygonMode = VK_POLYGON_MODE_FILL;
+    public static int cullFace = VK_CULL_MODE_BACK_BIT;
+    public static int frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     public static boolean canSetLineWidth = false;
 
     public static int colorMask = PipelineState.ColorMask.getColorMask(true, true, true, true);
@@ -39,12 +50,20 @@ public abstract class VRenderSystem {
     public static int logicOpFun = 0;
 
     public static float clearDepthValue = DEFAULT_DEPTH_VALUE;
+    public static int clearStencilValue = 0;
     public static FloatBuffer clearColor = MemoryUtil.memCallocFloat(4);
 
     public static MappedBuffer modelViewMatrix = new MappedBuffer(16 * 4);
     public static MappedBuffer projectionMatrix = new MappedBuffer(16 * 4);
     public static MappedBuffer TextureMatrix = new MappedBuffer(16 * 4);
     public static MappedBuffer MVP = new MappedBuffer(16 * 4);
+    private static final Matrix4f vulkanProjectionMatrix = new Matrix4f();
+
+    private static final FloatBuffer modelViewFloatView = modelViewMatrix.buffer.asFloatBuffer();
+    private static final FloatBuffer projectionFloatView = projectionMatrix.buffer.asFloatBuffer();
+    private static final FloatBuffer textureMatrixFloatView = TextureMatrix.buffer.asFloatBuffer();
+    private static final Matrix4f scratchModelView = new Matrix4f();
+    private static final Matrix4f scratchMVP = new Matrix4f();
 
     public static MappedBuffer ChunkOffset = new MappedBuffer(3 * 4);
     public static MappedBuffer lightDirection0 = new MappedBuffer(3 * 4);
@@ -52,6 +71,7 @@ public abstract class VRenderSystem {
 
     public static MappedBuffer shaderColor = new MappedBuffer(4 * 4);
     public static MappedBuffer shaderFogColor = new MappedBuffer(4 * 4);
+    public static FloatBuffer blendColor = MemoryUtil.memCallocFloat(4);
 
     public static MappedBuffer screenSize = new MappedBuffer(2 * 4);
 
@@ -94,23 +114,29 @@ public abstract class VRenderSystem {
     }
 
     public static void applyModelViewMatrix(Matrix4f mat) {
-        mat.get(modelViewMatrix.buffer.asFloatBuffer());
-        //MemoryUtil.memPutFloat(MemoryUtil.memAddress(modelViewMatrix), 1);
+        mat.get(modelViewFloatView);
+
     }
 
     public static void applyProjectionMatrix(Matrix4f mat) {
-        mat.get(projectionMatrix.buffer.asFloatBuffer());
+        vulkanProjectionMatrix.set(mat);
+
+        vulkanProjectionMatrix.m02((mat.m02() + mat.m03()) * 0.5F);
+        vulkanProjectionMatrix.m12((mat.m12() + mat.m13()) * 0.5F);
+        vulkanProjectionMatrix.m22((mat.m22() + mat.m23()) * 0.5F);
+        vulkanProjectionMatrix.m32((mat.m32() + mat.m33()) * 0.5F);
+        vulkanProjectionMatrix.get(projectionFloatView);
     }
 
     public static void calculateMVP() {
-        org.joml.Matrix4f MV = new org.joml.Matrix4f(modelViewMatrix.buffer.asFloatBuffer());
-        org.joml.Matrix4f P = new org.joml.Matrix4f(projectionMatrix.buffer.asFloatBuffer());
+        scratchModelView.set(modelViewFloatView);
+        scratchMVP.set(projectionFloatView);
 
-        P.mul(MV).get(MVP.buffer);
+        scratchMVP.mul(scratchModelView).get(MVP.buffer);
     }
 
     public static void setTextureMatrix(Matrix4f mat) {
-        mat.get(TextureMatrix.buffer.asFloatBuffer());
+        mat.get(textureMatrixFloatView);
     }
 
     public static MappedBuffer getTextureMatrix() {
@@ -126,6 +152,7 @@ public abstract class VRenderSystem {
     }
 
     public static MappedBuffer getMVP() {
+        calculateMVP();
         return MVP;
     }
 
@@ -142,6 +169,13 @@ public abstract class VRenderSystem {
 
     public static void setShaderFogColor(float f1, float f2, float f3, float f4) {
         ColorUtil.setRGBA_Buffer(shaderFogColor, f1, f2, f3, f4);
+    }
+
+    public static void blendColor(float red, float green, float blue, float alpha) {
+        blendColor.put(0, red);
+        blendColor.put(1, green);
+        blendColor.put(2, blue);
+        blendColor.put(3, alpha);
     }
 
     public static MappedBuffer getShaderColor() {
@@ -164,7 +198,9 @@ public abstract class VRenderSystem {
         clearDepthValue = (float) depth;
     }
 
-    // Pipeline state
+    public static void clearStencil(int stencil) {
+        clearStencilValue = stencil;
+    }
 
     public static void disableDepthTest() {
         depthTest = false;
@@ -176,9 +212,20 @@ public abstract class VRenderSystem {
 
     public static void setPrimitiveTopologyGL(final int mode) {
         VRenderSystem.topology = switch (mode) {
+            case GL11.GL_POINTS -> VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
             case GL11.GL_LINES, GL11.GL_LINE_STRIP  -> VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
             case GL11.GL_TRIANGLE_FAN, GL11.GL_TRIANGLES, GL11.GL_TRIANGLE_STRIP -> VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-            default -> throw new RuntimeException(String.format("Unknown GL primitive topology: %s", mode));
+
+            default -> VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+        };
+    }
+
+    public static void setPrimitiveTopology(VertexFormat.Mode mode) {
+        VRenderSystem.topology = switch (mode) {
+            case LINES, LINE_STRIP -> VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+            case DEBUG_LINE_STRIP, DEBUG_LINES -> VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
+            case QUADS, TRIANGLE_FAN, TRIANGLES, TRIANGLE_STRIP -> VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+            default -> throw new RuntimeException(String.format("Unknown primitive topology: %s", mode));
         };
     }
 
@@ -188,6 +235,23 @@ public abstract class VRenderSystem {
             case GL11.GL_LINE -> VK_POLYGON_MODE_LINE;
             case GL11.GL_FILL -> VK_POLYGON_MODE_FILL;
             default -> throw new RuntimeException(String.format("Unknown GL polygon mode: %s", mode));
+        };
+    }
+
+    public static void cullFace(final int mode) {
+        VRenderSystem.cullFace = switch (mode) {
+            case GL11.GL_FRONT -> VK_CULL_MODE_FRONT_BIT;
+            case GL11.GL_BACK -> VK_CULL_MODE_BACK_BIT;
+            case GL11.GL_FRONT_AND_BACK -> VK_CULL_MODE_FRONT_AND_BACK;
+            default -> throw new RuntimeException(String.format("Unknown GL cull face: %s", mode));
+        };
+    }
+
+    public static void frontFace(final int mode) {
+        VRenderSystem.frontFace = switch (mode) {
+            case GL11.GL_CW -> VK_FRONT_FACE_CLOCKWISE;
+            case GL11.GL_CCW -> VK_FRONT_FACE_COUNTER_CLOCKWISE;
+            default -> throw new RuntimeException(String.format("Unknown GL front face: %s", mode));
         };
     }
 
@@ -209,6 +273,14 @@ public abstract class VRenderSystem {
         depthTest = true;
     }
 
+    public static void enableStencilTest() {
+        stencilTest = true;
+    }
+
+    public static void disableStencilTest() {
+        stencilTest = false;
+    }
+
     public static void enableCull() {
         cull = true;
     }
@@ -219,6 +291,22 @@ public abstract class VRenderSystem {
 
     public static void depthFunc(int depthFun) {
         VRenderSystem.depthFun = depthFun;
+    }
+
+    public static void stencilFunc(int func, int ref, int mask) {
+        stencilFunc = func;
+        stencilRef = ref;
+        stencilFuncMask = mask;
+    }
+
+    public static void stencilOp(int sfail, int dpfail, int dppass) {
+        stencilFailOp = sfail;
+        stencilDepthFailOp = dpfail;
+        stencilPassOp = dppass;
+    }
+
+    public static void stencilMask(int mask) {
+        stencilWriteMask = mask;
     }
 
     public static void enableBlend() {
@@ -243,6 +331,14 @@ public abstract class VRenderSystem {
 
     public static void blendFuncSeparate(int srcFactorRGB, int dstFactorRGB, int srcFactorAlpha, int dstFactorAlpha) {
         PipelineState.blendInfo.setBlendFuncSeparate(srcFactorRGB, dstFactorRGB, srcFactorAlpha, dstFactorAlpha);
+    }
+
+    public static void blendEquation(int mode) {
+        PipelineState.blendInfo.setBlendOp(mode);
+    }
+
+    public static void blendEquationSeparate(int modeRGB, int modeAlpha) {
+        PipelineState.blendInfo.setBlendOpSeparate(modeRGB, modeAlpha);
     }
 
     public static void enableColorLogicOp() {

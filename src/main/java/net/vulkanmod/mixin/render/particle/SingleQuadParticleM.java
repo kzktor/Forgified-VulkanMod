@@ -33,15 +33,15 @@ public abstract class SingleQuadParticleM extends Particle {
 
     @Shadow public abstract float getQuadSize(float f);
 
+    private static final Vector3f[] SCRATCH_CORNERS = new Vector3f[]{ new Vector3f(), new Vector3f(), new Vector3f(), new Vector3f() };
+    private static final Quaternionf SCRATCH_ROTATION = new Quaternionf();
+    private static final BlockPos.MutableBlockPos SCRATCH_LIGHT_POS = new BlockPos.MutableBlockPos();
+
     protected SingleQuadParticleM(ClientLevel clientLevel, double d, double e, double f, double g, double h, double i) {
         super(clientLevel, d, e, f, g, h, i);
         this.quadSize = 0.1F * (this.random.nextFloat() * 0.5F + 0.5F) * 2.0F;
     }
 
-    /**
-     * @author
-     * @reason
-     */
     @Overwrite
     public void render(VertexConsumer vertexConsumer, Camera camera, float f) {
         double lx = (Mth.lerp(f, this.xo, this.x));
@@ -58,13 +58,17 @@ public abstract class SingleQuadParticleM extends Particle {
 
         Quaternionf quaternionf;
         if (this.roll != 0.0F) {
-            quaternionf = new Quaternionf(camera.rotation());
+            quaternionf = SCRATCH_ROTATION.set(camera.rotation());
             quaternionf.rotateZ(Mth.lerp(f, this.oRoll, this.roll));
         } else {
             quaternionf = camera.rotation();
         }
 
-        Vector3f[] vector3fs = new Vector3f[]{new Vector3f(-1.0F, -1.0F, 0.0F), new Vector3f(-1.0F, 1.0F, 0.0F), new Vector3f(1.0F, 1.0F, 0.0F), new Vector3f(1.0F, -1.0F, 0.0F)};
+        Vector3f[] vector3fs = SCRATCH_CORNERS;
+        vector3fs[0].set(-1.0F, -1.0F, 0.0F);
+        vector3fs[1].set(-1.0F, 1.0F, 0.0F);
+        vector3fs[2].set(1.0F, 1.0F, 0.0F);
+        vector3fs[3].set(1.0F, -1.0F, 0.0F);
         float j = this.getQuadSize(f);
 
         for(int k = 0; k < 4; ++k) {
@@ -80,7 +84,13 @@ public abstract class SingleQuadParticleM extends Particle {
         float v1 = this.getV1();
         int light = this.getLightColor(f);
 
-        ExtendedVertexBuilder vertexBuilder = (ExtendedVertexBuilder)vertexConsumer;
+        ExtendedVertexBuilder vertexBuilder = ExtendedVertexBuilder.of(vertexConsumer);
+        if (vertexBuilder == null) {
+
+            emitStandardQuad(vertexConsumer, vector3fs, u0, u1, v0, v1, light);
+            return;
+        }
+
         int packedColor = ColorUtil.RGBA.pack(this.rCol, this.gCol, this.bCol, this.alpha);
 
         vertexBuilder.vertex(vector3fs[1].x(), vector3fs[1].y(), vector3fs[1].z(), u1, v0, packedColor, light);
@@ -89,8 +99,24 @@ public abstract class SingleQuadParticleM extends Particle {
         vertexBuilder.vertex(vector3fs[2].x(), vector3fs[2].y(), vector3fs[2].z(), u0, v0, packedColor, light);
     }
 
+    private void emitStandardQuad(VertexConsumer consumer, Vector3f[] corners,
+                                  float u0, float u1, float v0, float v1, int light) {
+        emitStandardVertex(consumer, corners[1], u1, v0, light);
+        emitStandardVertex(consumer, corners[0], u1, v1, light);
+        emitStandardVertex(consumer, corners[3], u0, v1, light);
+        emitStandardVertex(consumer, corners[2], u0, v0, light);
+    }
+
+    private void emitStandardVertex(VertexConsumer consumer, Vector3f corner, float u, float v, int light) {
+        consumer.addVertex(corner.x(), corner.y(), corner.z())
+                .setUv(u, v)
+                .setColor(this.rCol, this.gCol, this.bCol, this.alpha)
+                .setLight(light);
+    }
+
     protected int getLightColor(float f) {
-        BlockPos blockPos = BlockPos.containing(this.x, this.y, this.z);
+
+        BlockPos blockPos = SCRATCH_LIGHT_POS.set(Mth.floor(this.x), Mth.floor(this.y), Mth.floor(this.z));
         return this.level.hasChunkAt(blockPos) ? LevelRenderer.getLightColor(this.level, blockPos) : 0;
     }
 

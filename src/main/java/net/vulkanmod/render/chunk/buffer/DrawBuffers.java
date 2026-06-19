@@ -23,6 +23,10 @@ import static org.lwjgl.vulkan.VK10.*;
 public class DrawBuffers {
     private static final int VERTEX_SIZE = PipelineManager.TERRAIN_VERTEX_FORMAT.getVertexSize();
     private static final int INDEX_SIZE = Short.BYTES;
+    private static final int SOLID_VERTEX_BUFFER_BYTES = 1_048_576;
+    private static final int CUTOUT_VERTEX_BUFFER_BYTES = 1_048_576;
+    private static final int CUTOUT_MIPPED_VERTEX_BUFFER_BYTES = 2_097_152;
+    private static final int TRANSLUCENT_VERTEX_BUFFER_BYTES = 524_288;
     private final int index;
     private final Vector3i origin;
     private final int minHeight;
@@ -31,7 +35,6 @@ public class DrawBuffers {
     AreaBuffer indexBuffer;
     private final EnumMap<TerrainRenderType, AreaBuffer> vertexBuffers = new EnumMap<>(TerrainRenderType.class);
 
-    //Need ugly minHeight Parameter to fix custom world heights (exceeding 384 Blocks in total)
     public DrawBuffers(int index, Vector3i origin, int minHeight) {
         this.index = index;
         this.origin = origin;
@@ -52,7 +55,7 @@ public class DrawBuffers {
 
         if (!buffer.autoIndices) {
             if (this.indexBuffer == null)
-                this.indexBuffer = new AreaBuffer(AreaBuffer.Usage.INDEX, 60000, INDEX_SIZE);
+                this.indexBuffer = new AreaBuffer(AreaBuffer.Usage.INDEX, 131072, INDEX_SIZE);
 
             AreaBuffer.Segment segment = this.indexBuffer.upload(buffer.getIndexBuffer(), drawParameters.firstIndex, drawParameters);
             firstIndex = segment.offset / INDEX_SIZE;
@@ -68,14 +71,21 @@ public class DrawBuffers {
     private AreaBuffer getAreaBufferOrAlloc(TerrainRenderType renderType) {
         this.allocated = true;
 
-        int initialSize = switch (renderType) {
-            case SOLID, CUTOUT -> 100000;
-            case CUTOUT_MIPPED -> 250000;
-            case TRANSLUCENT, TRIPWIRE -> 60000;
-        };
-
         return this.vertexBuffers.computeIfAbsent(
-                renderType, renderType1 -> new AreaBuffer(AreaBuffer.Usage.VERTEX, initialSize, VERTEX_SIZE));
+                renderType, renderType1 -> new AreaBuffer(AreaBuffer.Usage.VERTEX, initialVertexBufferElementCount(renderType), VERTEX_SIZE));
+    }
+
+    static int initialVertexBufferElementCount(TerrainRenderType renderType) {
+        return Math.max(1, (initialVertexBufferBytes(renderType) + VERTEX_SIZE - 1) / VERTEX_SIZE);
+    }
+
+    private static int initialVertexBufferBytes(TerrainRenderType renderType) {
+        return switch (renderType) {
+            case SOLID -> SOLID_VERTEX_BUFFER_BYTES;
+            case CUTOUT -> CUTOUT_VERTEX_BUFFER_BYTES;
+            case CUTOUT_MIPPED -> CUTOUT_MIPPED_VERTEX_BUFFER_BYTES;
+            case TRANSLUCENT, TRIPWIRE -> TRANSLUCENT_VERTEX_BUFFER_BYTES;
+        };
     }
 
     public AreaBuffer getAreaBuffer(TerrainRenderType r) {
@@ -93,7 +103,6 @@ public class DrawBuffers {
         return yOffset1 << 16 | zOffset1 << 8 | xOffset1;
     }
 
-    // TODO: refactor
     public static final float POS_OFFSET = PipelineManager.TERRAIN_VERTEX_FORMAT == CustomVertexFormat.COMPRESSED_TERRAIN ? 4.0f : 0.0f;
 
     private void updateChunkAreaOrigin(VkCommandBuffer commandBuffer, Pipeline pipeline, double camX, double camY, double camZ, MemoryStack stack) {
@@ -120,9 +129,11 @@ public class DrawBuffers {
             boolean isTranslucent = terrainRenderType == TerrainRenderType.TRANSLUCENT;
 
             int drawCount = 0;
-            for (var iterator = queue.iterator(isTranslucent); iterator.hasNext(); ) {
 
-                final RenderSection section = iterator.next();
+            final int queueSize = queue.size();
+            for (int idx = 0; idx < queueSize; idx++) {
+
+                final RenderSection section = queue.get(isTranslucent ? queueSize - 1 - idx : idx);
                 final DrawParameters drawParameters = section.getDrawParameters(terrainRenderType);
 
                 if (drawParameters.indexCount <= 0)
@@ -142,10 +153,8 @@ public class DrawBuffers {
 
             indirectBuffer.recordCopyCmd(byteBuffer.position(0));
 
-
             vkCmdDrawIndexedIndirect(Renderer.getCommandBuffer(), indirectBuffer.getId(), indirectBuffer.getOffset(), drawCount, 20);
         }
-
 
     }
 
@@ -153,8 +162,9 @@ public class DrawBuffers {
         boolean isTranslucent = renderType == TerrainRenderType.TRANSLUCENT;
         VkCommandBuffer commandBuffer = Renderer.getCommandBuffer();
 
-        for (var iterator = queue.iterator(isTranslucent); iterator.hasNext(); ) {
-            final RenderSection section = iterator.next();
+        final int queueSize = queue.size();
+        for (int idx = 0; idx < queueSize; idx++) {
+            final RenderSection section = queue.get(isTranslucent ? queueSize - 1 - idx : idx);
             final DrawParameters drawParameters = section.getDrawParameters(renderType);
 
             if (drawParameters.indexCount <= 0)
@@ -216,8 +226,12 @@ public class DrawBuffers {
         public void reset(ChunkArea chunkArea, TerrainRenderType r) {
             AreaBuffer areaBuffer = chunkArea.getDrawBuffers().getAreaBuffer(r);
             if (areaBuffer != null && this.vertexOffset != -1) {
-                int segmentOffset = this.vertexOffset * VERTEX_SIZE;
-                areaBuffer.setSegmentFree(segmentOffset);
+                areaBuffer.setSegmentFree(this.vertexOffset);
+            }
+
+            AreaBuffer indexBuffer = chunkArea.getDrawBuffers().getIndexBuffer();
+            if (indexBuffer != null && this.firstIndex != -1) {
+                indexBuffer.setSegmentFree(this.firstIndex);
             }
 
             this.indexCount = 0;

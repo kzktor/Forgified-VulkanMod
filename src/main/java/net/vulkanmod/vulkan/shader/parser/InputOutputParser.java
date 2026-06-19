@@ -24,6 +24,12 @@ public class InputOutputParser {
 
     public InputOutputParser(GlslConverter converterInstance) {
         this.converterInstance = converterInstance;
+        this.vertInAttributes.parser = this;
+        this.vertOutAttributes.parser = this;
+    }
+
+    public void setFormat(VertexFormat format) {
+        this.vertexFormat = format;
     }
 
     public boolean parseToken(String token) {
@@ -46,11 +52,10 @@ public class InputOutputParser {
             else {
                 switch (this.ioType) {
                     case "in" -> {
-                        if(!this.vertOutAttributes.contains(this.type, this.name))
-                            throw new RuntimeException("fragment in attribute does not match vertex output");
+
                     }
                     case "out" -> {
-                        //TODO check output
+
                     }
                 }
             }
@@ -68,30 +73,28 @@ public class InputOutputParser {
     }
 
     public String createInOutCode() {
-        //TODO
+
         StringBuilder builder = new StringBuilder();
 
         if(this.shaderStage == GlslConverter.ShaderStage.Vertex) {
-            //In
+
             for(Attribute attribute : this.vertInAttributes.attributes) {
                 builder.append(String.format("layout(location = %d) in %s %s;\n", attribute.location, attribute.type, attribute.name));
             }
             builder.append("\n");
 
-            //Out
             for(Attribute attribute : this.vertOutAttributes.attributes) {
                 builder.append(String.format("layout(location = %d) out %s %s;\n", attribute.location, attribute.type, attribute.name));
             }
             builder.append("\n");
         }
         else {
-            //In
+
             for(Attribute attribute : this.vertOutAttributes.attributes) {
                 builder.append(String.format("layout(location = %d) in %s %s;\n", attribute.location, attribute.type, attribute.name));
             }
             builder.append("\n");
 
-            //TODO multi attachments?
             builder.append(String.format("layout(location = 0) out vec4 fragColor;\n\n"));
         }
 
@@ -107,9 +110,17 @@ public class InputOutputParser {
     static class AttributeSet {
         List<Attribute> attributes = new ObjectArrayList<>();
         int currentLocation = 0;
+        InputOutputParser parser;
 
         void add(String type, String name) {
-            this.attributes.add(new Attribute(this.currentLocation, type, name));
+            int loc = this.currentLocation;
+            if (parser != null && parser.shaderStage == GlslConverter.ShaderStage.Vertex && parser.vertexFormat != null) {
+                int idx = parser.vertexFormat.getElementAttributeNames().indexOf(name);
+                if (idx != -1) {
+                    loc = idx;
+                }
+            }
+            this.attributes.add(new Attribute(loc, type, name));
             this.currentLocation++;
         }
 

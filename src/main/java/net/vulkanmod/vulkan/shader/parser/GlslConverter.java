@@ -1,12 +1,13 @@
 package net.vulkanmod.vulkan.shader.parser;
 
+import com.mojang.blaze3d.vertex.VertexFormat;
 import net.vulkanmod.vulkan.shader.descriptor.ImageDescriptor;
 import net.vulkanmod.vulkan.shader.descriptor.UBO;
 
 import java.util.*;
 
 public class GlslConverter {
-    
+
     ShaderStage shaderStage;
     private State state;
 
@@ -16,9 +17,16 @@ public class GlslConverter {
     private String vshConverted;
     private String fshConverted;
 
+    private VertexFormat format;
+
+    public void setFormat(VertexFormat format) {
+        this.format = format;
+    }
+
     public void process(String vertShader, String fragShader) {
         this.uniformParser = new UniformParser(this);
         this.inOutParser = new InputOutputParser(this);
+        this.inOutParser.setFormat(this.format);
 
         StringBuilder vshOut = new StringBuilder();
         StringBuilder fshOut = new StringBuilder();
@@ -82,7 +90,6 @@ public class GlslConverter {
 
         StringTokenizer tokenizer = new StringTokenizer(line);
 
-        // empty line
         if (!tokenizer.hasMoreTokens())
             return "\n";
 
@@ -99,7 +106,12 @@ public class GlslConverter {
                     throw new IllegalArgumentException("Token count != 1");
                 }
 
-                return String.format("#include %s", tokenizer.nextToken());
+                String importPath = tokenizer.nextToken();
+                if (importPath.startsWith("<") && importPath.endsWith(">")) {
+                    importPath = "\"" + importPath.substring(1, importPath.length() - 1) + "\"";
+                }
+
+                return String.format("#include %s", importPath);
             }
 
             default -> {

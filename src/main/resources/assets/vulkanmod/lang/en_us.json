@@ -9,6 +9,13 @@
   "vulkanmod.options.buttons.apply": "Apply",
   "vulkanmod.options.buttons.kofi": "Support me",
 
+  "vulkanmod.options.performancePreset": "Performance Preset",
+  "vulkanmod.options.performancePreset.tooltip": "Applies a group of Minecraft and VulkanMod settings for the selected performance target.",
+  "vulkanmod.options.performancePreset.custom": "Custom",
+  "vulkanmod.options.performancePreset.potato": "Potato",
+  "vulkanmod.options.performancePreset.balanced": "Balanced",
+  "vulkanmod.options.performancePreset.quality": "Quality",
+
   "vulkanmod.options.advCulling": "Advanced Chunk Culling",
   "vulkanmod.options.advCulling.aggressive": "Aggressive",
   "vulkanmod.options.advCulling.conservative": "Conservative",
@@ -30,11 +37,25 @@
 
   "vulkanmod.options.indirectDraw": "Indirect Draw",
   "vulkanmod.options.indirectDraw.tooltip": "Reduces CPU overhead but increases GPU overhead. Enabling it might help in CPU limited systems.",
+  "vulkanmod.options.adaptiveChunkUploads": "Adaptive Chunk Uploads",
+  "vulkanmod.options.adaptiveChunkUploads.tooltip": "Adjusts chunk upload work from recent frame time to reduce stutter while moving or flying.",
 
   "vulkanmod.options.refreshRate": "Refresh Rate",
 
   "vulkanmod.options.uniqueOpaqueLayer": "Unique opaque layer",
   "vulkanmod.options.uniqueOpaqueLayer.tooltip": "Use a unique render layer for opaque terrain to improve performance.",
 
-  "vulkanmod.options.windowedFullscreen": "Windowed Fullscreen"
+  "vulkanmod.options.windowedFullscreen": "Windowed Fullscreen",
+  "vulkanmod.options.particleCulling": "Particle Culling",
+  "vulkanmod.options.particleCulling.quality": "Quality",
+  "vulkanmod.options.particleCulling.balanced": "Balanced",
+  "vulkanmod.options.particleCulling.performance": "Performance",
+  "vulkanmod.options.particleCulling.tooltip": "Cull redundant particles based on distance, player FOV, and maximum same-type count budgets.",
+  "vulkanmod.options.blockEntityCulling": "Block Entity Culling",
+  "vulkanmod.options.blockEntityCulling.tooltip": "Cull block entities (chests, signs, spawners, etc.) that are outside the camera frustum or further than 96 blocks.",
+  "vulkanmod.options.leavesCulling": "Leaves Culling",
+  "vulkanmod.options.leavesCulling.tooltip": "Cull adjacent interior faces of leaf blocks to significantly improve performance in forests.",
+  "vulkanmod.options.textureAnimations": "Texture Animations",
+  "vulkanmod.options.renderScale": "Render Scale",
+  "vulkanmod.options.renderScale.tooltip": "Renders Minecraft at a lower internal resolution, then scales it back to the current window or fullscreen size."
 }

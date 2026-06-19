@@ -5,6 +5,7 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.model.geom.ModelPart;
 import net.vulkanmod.interfaces.ExtendedVertexBuilder;
 import net.vulkanmod.interfaces.ModelPartCubeMixed;
+import net.vulkanmod.compat.render.GuiEntityRenderState;
 import net.vulkanmod.render.model.CubeModel;
 import net.vulkanmod.render.vertex.VertexUtil;
 import net.vulkanmod.vulkan.util.ColorUtil;
@@ -26,6 +27,10 @@ public abstract class ModelPartM {
 
     @Inject(method = "compile", at = @At("HEAD"), cancellable = true)
     private void injCompile(PoseStack.Pose pose, VertexConsumer vertexConsumer, int light, int overlay, int color, CallbackInfo ci) {
+        if (GuiEntityRenderState.isGuiEntityPreview(light)) {
+            GuiEntityRenderState.prepareDeferredDraw();
+        }
+
         this.renderCubes(pose, vertexConsumer, light, overlay, color);
         ci.cancel();
     }

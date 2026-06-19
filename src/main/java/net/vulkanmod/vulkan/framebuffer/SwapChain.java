@@ -31,8 +31,6 @@ import static org.lwjgl.vulkan.VK10.*;
 public class SwapChain extends Framebuffer {
     private static final int DEFAULT_IMAGE_COUNT = 3;
 
-    // Necessary until tearing-control-unstable-v1 is fully implemented on all GPU Drivers for Wayland
-    // (As Immediate Mode (and by extension Screen tearing) doesn't exist on some Wayland installations currently)
     private static final int defUncappedMode = checkPresentMode(VK_PRESENT_MODE_IMMEDIATE_KHR, VK_PRESENT_MODE_MAILBOX_KHR);
 
     private final Long2ReferenceOpenHashMap<long[]> FBO_map = new Long2ReferenceOpenHashMap<>();
@@ -44,6 +42,7 @@ public class SwapChain extends Framebuffer {
     private boolean vsync = false;
 
     private int[] glIds;
+    private int depthAttachmentGlId = -1;
 
     public SwapChain() {
         this.attachmentCount = 2;
@@ -90,8 +89,6 @@ public class SwapChain extends Framebuffer {
                 return;
             }
 
-            // minImageCount depends on driver: Mesa/RADV needs a min of 4, but most other drivers are at least 2 or 3
-            // TODO using FIFO present mode with image num > 2 introduces (unnecessary) input lag
             int requestedImages = Math.max(DEFAULT_IMAGE_COUNT, surfaceProperties.capabilities.minImageCount());
 
             IntBuffer imageCount = stack.ints(requestedImages);
@@ -101,7 +98,6 @@ public class SwapChain extends Framebuffer {
             createInfo.sType(VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR);
             createInfo.surface(Vulkan.getSurface());
 
-            // Image settings
             this.format = surfaceFormat.format();
             this.extent2D = VkExtent2D.create().set(extent);
 
@@ -213,6 +209,15 @@ public class SwapChain extends Framebuffer {
         this.depthAttachment = VulkanImage.createDepthImage(depthFormat, this.width, this.height,
                 VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
                 false, false);
+
+        if (this.depthAttachmentGlId == -1) {
+            this.depthAttachmentGlId = GlTexture.genTextureId();
+        }
+        GlTexture.bindIdToImage(this.depthAttachmentGlId, this.depthAttachment);
+    }
+
+    public int getDepthAttachmentGlId() {
+        return this.depthAttachmentGlId;
     }
 
     @Override
@@ -231,6 +236,17 @@ public class SwapChain extends Framebuffer {
 
         vkDestroySwapchainKHR(device, this.swapChainId, null);
         this.swapChainImages.forEach(image -> vkDestroyImageView(device, image.getImageView(), null));
+
+        if (this.glIds != null) {
+            for (int id : this.glIds) {
+                GlTexture.setVulkanImage(id, null);
+            }
+        }
+
+        if (this.depthAttachmentGlId != -1) {
+            GlTexture.setVulkanImage(this.depthAttachmentGlId, null);
+            this.depthAttachmentGlId = -1;
+        }
 
         this.depthAttachment.free();
     }
@@ -281,7 +297,6 @@ public class SwapChain extends Framebuffer {
     private int getPresentMode(IntBuffer availablePresentModes) {
         int requestedMode = vsync ? VK_PRESENT_MODE_FIFO_KHR : defUncappedMode;
 
-        // FIFO mode is the only mode that has to be supported
         if (requestedMode == VK_PRESENT_MODE_FIFO_KHR)
             return VK_PRESENT_MODE_FIFO_KHR;
 
@@ -310,7 +325,6 @@ public class SwapChain extends Framebuffer {
             return capabilities.currentExtent();
         }
 
-        //Fallback
         IntBuffer width = stackGet().ints(0);
         IntBuffer height = stackGet().ints(0);
 
@@ -337,7 +351,7 @@ public class SwapChain extends Framebuffer {
                     }
                 }
             }
-            return VK_PRESENT_MODE_FIFO_KHR; //If None of the request modes exist/are supported by Driver
+            return VK_PRESENT_MODE_FIFO_KHR;
         }
     }
 

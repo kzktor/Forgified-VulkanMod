@@ -31,9 +31,6 @@ public class Device {
     public final VkPhysicalDeviceFeatures2 availableFeatures;
     public final VkPhysicalDeviceVulkan11Features availableFeatures11;
 
-//    public final VkPhysicalDeviceVulkan13Features availableFeatures13;
-//    public final boolean vulkan13Support;
-
     private boolean drawIndirectSupported;
 
     public Device(VkPhysicalDevice device) {
@@ -55,13 +52,6 @@ public class Device {
         this.availableFeatures11.sType$Default();
         this.availableFeatures.pNext(this.availableFeatures11);
 
-        //Vulkan 1.3
-//        this.availableFeatures13 = VkPhysicalDeviceVulkan13Features.malloc();
-//        this.availableFeatures13.sType$Default();
-//        this.availableFeatures11.pNext(this.availableFeatures13.address());
-//
-//        this.vulkan13Support = this.device.getCapabilities().apiVersion == VK_API_VERSION_1_3;
-
         vkGetPhysicalDeviceFeatures2(this.physicalDevice, this.availableFeatures);
 
         if (this.availableFeatures.features().multiDrawIndirect() && this.availableFeatures11.shaderDrawParameters())
@@ -74,35 +64,26 @@ public class Device {
             case (0x10DE) -> "Nvidia";
             case (0x1022) -> "AMD";
             case (0x8086) -> "Intel";
-            default -> "undef"; //Either AMD or Unknown Driver version/vendor and.or Encoding Scheme
+            default -> "undef";
         };
     }
-
-    // Should Work with AMD: https://gpuopen.com/learn/decoding-radeon-vulkan-versions/
 
     static String decDefVersion(int v) {
         return VK_VERSION_MAJOR(v) + "." + VK_VERSION_MINOR(v) + "." + VK_VERSION_PATCH(v);
     }
 
-    // 0x10DE = Nvidia: https://pcisig.com/membership/member-companies?combine=Nvidia
-    // https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkPhysicalDeviceProperties.html
-    // this should work with Nvidia + AMD but is not guaranteed to work with intel drivers in Windows and more obscure/Exotic Drivers/vendors
     private static String decodeDvrVersion(int v, int i) {
         return switch (i) {
-            case (0x10DE) -> decodeNvidia(v); //Nvidia
-            case (0x1022) -> decDefVersion(v); //AMD
-            case (0x8086) -> decIntelVersion(v); //Intel
-            default -> decDefVersion(v); //Either AMD or Unknown Driver Encoding Scheme
+            case (0x10DE) -> decodeNvidia(v);
+            case (0x1022) -> decDefVersion(v);
+            case (0x8086) -> decIntelVersion(v);
+            default -> decDefVersion(v);
         };
     }
 
-    // Source: https://www.intel.com/content/www/us/en/support/articles/000005654/graphics.html
-    // Won't Work with older Drivers (15.45 And.or older)
-    // May not work as this uses Guess work+Assumptions
     private static String decIntelVersion(int v) {
         return (glfwGetPlatform() == GLFW_PLATFORM_WIN32) ? (v >>> 14) + "." + (v & 0x3fff) : decDefVersion(v);
     }
-
 
     private static String decodeNvidia(int v) {
         return (v >>> 22 & 0x3FF) + "." + (v >>> 14 & 0xff) + "." + (v >>> 6 & 0xff) + "." + (v & 0xff);
@@ -127,7 +108,8 @@ public class Device {
 
             vkEnumerateDeviceExtensionProperties(physicalDevice, (String) null, extensionCount, null);
 
-            VkExtensionProperties.Buffer availableExtensions = VkExtensionProperties.malloc(extensionCount.get(0), stack);
+            VkExtensionProperties.Buffer availableExtensions = VkExtensionProperties.malloc(extensionCount.get(0),
+                    stack);
 
             vkEnumerateDeviceExtensionProperties(physicalDevice, (String) null, extensionCount, availableExtensions);
 
@@ -146,8 +128,6 @@ public class Device {
         return drawIndirectSupported;
     }
 
-    // Added these to allow detecting GPU vendor, to allow handling vendor specific circumstances:
-    // (e.g. such as in case we encounter a vendor specific driver bug)
     public boolean isAMD() {
         return vendorId == 0x1022;
     }
@@ -158,5 +138,11 @@ public class Device {
 
     public boolean isIntel() {
         return vendorId == 0x8086;
+    }
+
+    public void free() {
+        this.properties.free();
+        this.availableFeatures11.free();
+        this.availableFeatures.free();
     }
 }

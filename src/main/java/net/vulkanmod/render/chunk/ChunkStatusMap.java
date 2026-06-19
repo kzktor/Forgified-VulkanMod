@@ -36,8 +36,10 @@ public class ChunkStatusMap {
         current |= flag;
         map.put(l, current);
 
-        if ((current & CHUNK_READY) == CHUNK_READY)
+        if ((current & CHUNK_READY) == CHUNK_READY) {
             updateNeighbours(x, z);
+            scheduleGraphUpdateIfRendererExists();
+        }
     }
 
     public void resetChunkStatus(int x, int z, byte flag) {
@@ -83,7 +85,6 @@ public class ChunkStatusMap {
         }
         return true;
 
-//        return flags == CHUNK_READY;
     }
 
     public boolean chunkRenderReady(int x, int z) {
@@ -93,6 +94,13 @@ public class ChunkStatusMap {
 
     public void reset() {
 
+    }
+
+    private static void scheduleGraphUpdateIfRendererExists() {
+        WorldRenderer worldRenderer = WorldRenderer.getInstance();
+        if (worldRenderer != null && worldRenderer.getSectionGrid() != null) {
+            worldRenderer.scheduleGraphUpdate();
+        }
     }
 
 }

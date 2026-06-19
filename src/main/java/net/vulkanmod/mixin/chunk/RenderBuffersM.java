@@ -11,6 +11,7 @@ public class RenderBuffersM {
 
     @Redirect(method = "<init>", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/SectionBufferBuilderPool;allocate(I)Lnet/minecraft/client/renderer/SectionBufferBuilderPool;"))
     private SectionBufferBuilderPool red2(int i) {
-        return null;
+
+        return SectionBufferBuilderPool.allocate(Math.max(1, i / 4));
     }
 }

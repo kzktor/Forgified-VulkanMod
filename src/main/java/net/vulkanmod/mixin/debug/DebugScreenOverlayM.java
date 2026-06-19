@@ -4,13 +4,13 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.components.DebugScreenOverlay;
 import net.vulkanmod.render.chunk.WorldRenderer;
-import net.vulkanmod.vulkan.SystemInfo;
 import net.vulkanmod.vulkan.Vulkan;
 import net.vulkanmod.vulkan.device.Device;
 import net.vulkanmod.vulkan.memory.MemoryManager;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
@@ -62,7 +62,7 @@ public abstract class DebugScreenOverlayM {
         strings.add("DeviceMemory: %dMB".formatted(MemoryManager.getInstance().getAllocatedDeviceMemoryMB()));
         strings.add("");
         strings.add("VulkanMod " + getVersion());
-        strings.add("CPU: " + SystemInfo.cpuInfo);
+        strings.add("CPU: " + vulkanMod$getCpuInfo());
         strings.add("GPU: " + device.deviceName);
         strings.add("Driver: " + device.driverVersion);
         strings.add("Vulkan: " + device.vkVersion);
@@ -76,5 +76,12 @@ public abstract class DebugScreenOverlayM {
 
     private long getOffHeapMemory() {
         return bytesToMegabytes(ManagementFactory.getMemoryMXBean().getNonHeapMemoryUsage().getUsed());
+    }
+
+    @Unique
+    private static String vulkanMod$getCpuInfo() {
+        return "%s, %d logical processors".formatted(
+                System.getProperty("os.arch", "unknown"),
+                Runtime.getRuntime().availableProcessors());
     }
 }

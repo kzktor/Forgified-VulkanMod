@@ -25,6 +25,10 @@ public abstract class SpriteUtil {
         transitionedLayouts.add(image);
     }
 
+    public static void removeTransitionedLayout(VulkanImage image) {
+        transitionedLayouts.remove(image);
+    }
+
     public static void transitionLayouts(VkCommandBuffer commandBuffer) {
         try(MemoryStack stack = MemoryStack.stackPush()) {
             transitionedLayouts.forEach(image -> image.readOnlyLayout(stack, commandBuffer));

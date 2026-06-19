@@ -18,13 +18,19 @@ import org.lwjgl.vulkan.VkCommandBuffer;
 public class DrawUtil {
 
     public static void blitToScreen() {
-//        defualtBlit();
+
         fastBlit();
     }
 
     public static void fastBlit() {
-        GraphicsPipeline blitPipeline = PipelineManager.getFastBlitPipeline();
+        blit(PipelineManager.getFastBlitPipeline());
+    }
 
+    public static void blitRenderScaleToScreen() {
+        blit(PipelineManager.getRenderScaleBlitPipeline());
+    }
+
+    private static void blit(GraphicsPipeline blitPipeline) {
         RenderSystem.disableCull();
         VRenderSystem.setPrimitiveTopologyGL(GL11.GL_TRIANGLES);
 
@@ -48,7 +54,6 @@ public class DrawUtil {
         posestack.popMatrix();
 
         ShaderInstance shaderInstance = Minecraft.getInstance().gameRenderer.blitShader;
-//        RenderSystem.setShader(() -> shaderInstance);
 
         Tesselator tesselator = RenderSystem.renderThreadTesselator();
         BufferBuilder bufferBuilder = tesselator.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
@@ -63,6 +68,9 @@ public class DrawUtil {
         Renderer renderer = Renderer.getInstance();
 
         GraphicsPipeline pipeline = ((ShaderMixed)(shaderInstance)).getPipeline();
+        if (pipeline == null) {
+            return;
+        }
         renderer.bindGraphicsPipeline(pipeline);
         renderer.uploadAndBindUBOs(pipeline);
         Renderer.getDrawer().draw(meshData.vertexBuffer(), parameters.mode(), parameters.format(), parameters.vertexCount());

@@ -100,7 +100,35 @@ public class RenderRegion implements BlockAndTintGetter {
 
                     loadSectionBlockStates(container, blockData,
                             tMinX, tMinY, tMinZ, tMaxX, tMaxY, tMaxZ);
-                    
+
+                }
+            }
+        }
+
+        if (Boolean.getBoolean("vulkanmod.debug.equivalence")) {
+            for (int x = this.minX; x < this.maxX; ++x) {
+                for (int y = this.minY; y < this.maxY; ++y) {
+                    for (int z = this.minZ; z < this.maxZ; ++z) {
+                        BlockPos pos = new BlockPos(x, y, z);
+
+                        BlockState s1 = this.defaultBlockState(pos);
+                        BlockState s2 = this.getBlockStateRaw(x, y, z);
+                        if (s1 != s2) {
+                            throw new AssertionError(String.format("Equivalence mismatch for BlockState at (%d, %d, %d): Safe=%s, Raw=%s", x, y, z, s1, s2));
+                        }
+
+                        int b1 = this.getBrightness(LightLayer.BLOCK, pos);
+                        int b2 = this.getBrightnessRaw(LightLayer.BLOCK, x, y, z);
+                        if (b1 != b2) {
+                            throw new AssertionError(String.format("Equivalence mismatch for Block Light at (%d, %d, %d): Safe=%d, Raw=%d", x, y, z, b1, b2));
+                        }
+
+                        int sk1 = this.getBrightness(LightLayer.SKY, pos);
+                        int sk2 = this.getBrightnessRaw(LightLayer.SKY, x, y, z);
+                        if (sk1 != sk2) {
+                            throw new AssertionError(String.format("Equivalence mismatch for Sky Light at (%d, %d, %d): Safe=%d, Raw=%d", x, y, z, sk1, sk2));
+                        }
+                    }
                 }
             }
         }
@@ -221,6 +249,41 @@ public class RenderRegion implements BlockAndTintGetter {
         z -= minZ;
 
         return blockData[getBlockIdx(x, y, z)];
+    }
+
+    public BlockState getBlockStateRaw(int x, int y, int z) {
+        assert x >= minX && x < maxX && y >= minY && y < maxY && z >= minZ && z < maxZ
+            : String.format("Out of bounds block query: (%d, %d, %d) for region min: (%d, %d, %d) max: (%d, %d, %d)",
+                            x, y, z, minX, minY, minZ, maxX, maxY, maxZ);
+
+        int rx = x - minX;
+        int ry = y - minY;
+        int rz = z - minZ;
+        if (rx < 0 || rx >= REGION_BLOCK_WIDTH || ry < 0 || ry >= REGION_BLOCK_WIDTH || rz < 0 || rz >= REGION_BLOCK_WIDTH) {
+            return AIR_BLOCK_STATE;
+        }
+        return blockData[REGION_BLOCK_WIDTH * ((REGION_BLOCK_WIDTH * ry) + rz) + rx];
+    }
+
+    public int getBrightnessRaw(LightLayer lightLayer, int x, int y, int z) {
+        assert x >= minX && x < maxX && y >= minY && y < maxY && z >= minZ && z < maxZ
+            : String.format("Out of bounds light query: (%d, %d, %d) for region min: (%d, %d, %d) max: (%d, %d, %d)",
+                            x, y, z, minX, minY, minZ, maxX, maxY, maxZ);
+
+        int rx = x - minX;
+        int ry = y - minY;
+        int rz = z - minZ;
+        if (rx < 0 || rx >= REGION_BLOCK_WIDTH || ry < 0 || ry >= REGION_BLOCK_WIDTH || rz < 0 || rz >= REGION_BLOCK_WIDTH) {
+            return 0;
+        }
+
+        int secX = (x >> 4) - this.minSecX;
+        int secY = (y >> 4) - this.minSecY;
+        int secZ = (z >> 4) - this.minSecZ;
+
+        int secIdx = WIDTH * ((WIDTH * secY) + secZ) + secX;
+        DataLayer dataLayer = this.lightData[secIdx][lightLayer.ordinal()];
+        return dataLayer == null ? 0 : dataLayer.get(x & 15, y & 15, z & 15);
     }
 
     public BlockState debugBlockState(BlockPos blockPos) {
