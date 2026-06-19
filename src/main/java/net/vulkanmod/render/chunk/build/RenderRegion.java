@@ -105,33 +105,6 @@ public class RenderRegion implements BlockAndTintGetter {
             }
         }
 
-        if (Boolean.getBoolean("vulkanmod.debug.equivalence")) {
-            for (int x = this.minX; x < this.maxX; ++x) {
-                for (int y = this.minY; y < this.maxY; ++y) {
-                    for (int z = this.minZ; z < this.maxZ; ++z) {
-                        BlockPos pos = new BlockPos(x, y, z);
-
-                        BlockState s1 = this.defaultBlockState(pos);
-                        BlockState s2 = this.getBlockStateRaw(x, y, z);
-                        if (s1 != s2) {
-                            throw new AssertionError(String.format("Equivalence mismatch for BlockState at (%d, %d, %d): Safe=%s, Raw=%s", x, y, z, s1, s2));
-                        }
-
-                        int b1 = this.getBrightness(LightLayer.BLOCK, pos);
-                        int b2 = this.getBrightnessRaw(LightLayer.BLOCK, x, y, z);
-                        if (b1 != b2) {
-                            throw new AssertionError(String.format("Equivalence mismatch for Block Light at (%d, %d, %d): Safe=%d, Raw=%d", x, y, z, b1, b2));
-                        }
-
-                        int sk1 = this.getBrightness(LightLayer.SKY, pos);
-                        int sk2 = this.getBrightnessRaw(LightLayer.SKY, x, y, z);
-                        if (sk1 != sk2) {
-                            throw new AssertionError(String.format("Equivalence mismatch for Sky Light at (%d, %d, %d): Safe=%d, Raw=%d", x, y, z, sk1, sk2));
-                        }
-                    }
-                }
-            }
-        }
     }
 
     void loadSectionBlockStates(PalettedContainer<BlockState> container, BlockState[] blockStates,

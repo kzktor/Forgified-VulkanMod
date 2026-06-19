@@ -161,14 +161,6 @@ public final class GlFunctionRegistry {
         return SPECS.size();
     }
 
-    static Map<String, Spec> allFunctionsForTesting() {
-        return Map.copyOf(SPECS);
-    }
-
-    static String contractFamilyForTesting(String functionName) {
-        return contractFamily(functionName);
-    }
-
     private static String contractFamily(String functionName) {
         if (functionName == null || functionName.isBlank()) {
             return "provider";

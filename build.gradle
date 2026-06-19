@@ -30,18 +30,12 @@ neoForge {
             systemProperty 'fml.earlydisplay', 'true'
             systemProperty 'org.lwjgl.util.Debug', 'false'
             systemProperty 'org.lwjgl.util.DebugAllocator', 'false'
-            systemProperty 'vulkanmod.debug.equivalence', System.getProperty('vulkanmod.debug.equivalence', 'false')
-            systemProperty 'vulkanmod.smoke.autoshot', System.getProperty('vulkanmod.smoke.autoshot', 'false')
             systemProperty 'vulkanmod.compat.externalLod', System.getProperty('vulkanmod.compat.externalLod', 'off')
             systemProperty 'vulkanmod.compat.externalLod.draw', System.getProperty('vulkanmod.compat.externalLod.draw', 'true')
             systemProperty 'vulkanmod.compat.externalLod.debugDraw', System.getProperty('vulkanmod.compat.externalLod.debugDraw', 'false')
             jvmArguments.add('-ea')
             jvmArguments.add('-XX:+UseZGC')
             jvmArguments.add('-XX:SoftMaxHeapSize=1536m')
-            // Opt-in for unattended smoke tests: jump straight into a world.
-            if (System.getProperty('vulkanmod.smoke.quickplay') != null) {
-                programArguments.addAll '--quickPlaySingleplayer', System.getProperty('vulkanmod.smoke.quickplay')
-            }
         }
 
         server {

@@ -44,8 +44,6 @@ public class Initializer {
 		modContainer.registerExtensionPoint(IConfigScreenFactory.class,
 				(java.util.function.Supplier<IConfigScreenFactory>) () ->
 						(container, parent) -> new VOptionScreen(Component.literal("VulkanMod Settings"), parent));
-
-		net.vulkanmod.compat.SmokeAutoShot.registerIfEnabled();
 	}
 
 	private void onInitializeClient(FMLClientSetupEvent event) {

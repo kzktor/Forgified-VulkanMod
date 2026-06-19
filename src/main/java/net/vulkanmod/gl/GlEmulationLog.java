@@ -13,7 +13,6 @@ public final class GlEmulationLog {
             "framebuffer_readback",
             "shader_conversion",
             "draw_path",
-            "runtime_smoke",
             "performance");
 
     private static final class Log {
