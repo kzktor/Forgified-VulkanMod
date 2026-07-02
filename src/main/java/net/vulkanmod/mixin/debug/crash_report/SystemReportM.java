@@ -16,3 +16,4 @@ public class SystemReportM {
 		stringBuilder.append(DeviceManager.getAvailableDevicesInfo());
 	}
 }
+

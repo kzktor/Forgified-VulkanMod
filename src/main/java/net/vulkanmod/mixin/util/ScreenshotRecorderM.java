@@ -14,8 +14,8 @@ public class ScreenshotRecorderM {
     /**
      * @author
      */
-    @Overwrite
-    public static NativeImage takeScreenshot(RenderTarget target) {
+    @Overwrite(remap = false)
+    public static NativeImage m_92279_(RenderTarget target) {
         int width = target.width;
         int height = target.height;
 
@@ -30,3 +30,4 @@ public class ScreenshotRecorderM {
         return nativeimage;
     }
 }
+

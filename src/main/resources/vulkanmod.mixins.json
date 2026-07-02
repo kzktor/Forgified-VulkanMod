@@ -2,7 +2,7 @@
   "required": true,
   "minVersion": "0.8",
   "package": "net.vulkanmod.mixin",
-  "compatibilityLevel": "JAVA_21",
+  "compatibilityLevel": "JAVA_17",
   "refmap": "vulkanmod.refmap.json",
   "plugin": "net.vulkanmod.mixin.MixinPlugin",
   "mixins": [
@@ -11,18 +11,18 @@
     "window.WindowMixin",
     "window.WindowAccessor",
 
-    "chunk.ClientPacketListenerM",
-    "chunk.ClientChunkCacheM",
     "chunk.DirectionMixin",
     "chunk.FrustumMixin",
     "chunk.LevelRendererMixin",
-    "chunk.RenderBuffersM",
-    "chunk.ViewAreaM",
     "chunk.VisibilitySetMixin",
+    "chunk.ClientPacketListenerM",
+    "chunk.ClientChunkCacheM",
 
     "compatibility.EffectInstanceM",
     "compatibility.ProgramM",
     "compatibility.UniformM",
+    "compatibility.witherstorm.WitherStormRenderBuffererM",
+    "compatibility.flywheel.FlywheelBackendManagerMixin",
     "compatibility.gl.GL11FacadeM",
     "compatibility.gl.GL11M",
     "compatibility.gl.GL12M",
@@ -54,14 +54,17 @@
 
     "debug.DebugScreenOverlayM",
     "debug.GlDebugInfoM",
+    "debug.KeyboardHandlerM",
 
     "matrix.Matrix4fM",
+
+    "profiling.GuiMixin",
+    "profiling.KeyboardHandlerM",
+    "profiling.LevelRendererMixin",
 
     "render.BufferUploaderM",
     "render.BufferSourceM",
     "render.GameRendererMixin",
-    "render.GuiGraphicsRenderStateMixin",
-    "render.GuiRenderStateBoundaryMixin",
     "render.GlProgramManagerMixin",
     "render.GlStateManagerM",
     "render.LevelRendererMixin",
@@ -75,11 +78,11 @@
     "render.entity.ItemRendererM",
     "render.entity.LivingEntityRendererM",
     "render.entity.model.AgeableListModelM",
-    "render.entity.model.ModelPartCubeM",
-    "render.entity.model.ModelPartM",
-    "render.particle.SingleQuadParticleM",
+    "render.model.ModelPartM",
+    "render.model.ModelPartCubeM",
     "render.particle.ParticleEngineMixin",
     "render.particle.ParticleAccessor",
+    "render.particle.SingleQuadParticleM",
     "render.target.MainTargetMixin",
     "render.target.RenderTargetMixin",
     "render.vertex.BufferBuilderM",
@@ -97,6 +100,12 @@
     "texture.image.MNativeImage",
     "texture.image.NativeImageAccessor",
     "texture.MAbstractTexture",
+    "texture.MDynamicTexture",
+    "texture.MFontTexture",
+    "texture.MOverlayTexture",
+    "texture.MPlayerSkinTexture",
+    "texture.MSimpleTexture",
+    "texture.MSpriteAtlasTexture",
     "texture.MSpriteContents",
     "texture.MTextureManager",
     "texture.MTextureUtil",
@@ -116,9 +125,6 @@
 
     "compatibility.PostChainM",
     "compatibility.PostPassM",
-    "compatibility.create.CreateMainMenuScreenMixin",
-    "compatibility.tensura.TensuraOverlayHandlerMixin",
-    "compatibility.tensura.TensuraSimpleButtonMixin",
 
     "render.block.BakedQuadM",
 
@@ -131,3 +137,4 @@
     "defaultRequire": 1
   }
 }
+

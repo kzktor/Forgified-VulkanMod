@@ -1,5 +1,5 @@
 modLoader="javafml"
-loaderVersion="[4,)"
+loaderVersion="[47,)"
 license="LGPL-3.0"
 
 [[mods]]
@@ -17,14 +17,14 @@ Bring Vulkan to Minecraft!
 config="vulkanmod.mixins.json"
 
 [[dependencies.vulkanmod]]
-    modId="neoforge"
-    type="required"
-    versionRange="[21,)"
+    modId="forge"
+    mandatory=true
+    versionRange="[47.1.106,)"
     ordering="NONE"
     side="BOTH"
 [[dependencies.vulkanmod]]
     modId="minecraft"
-    type="required"
-    versionRange="[1.21.1,1.22)"
+    mandatory=true
+    versionRange="[1.20.1,1.20.2)"
     ordering="NONE"
     side="BOTH"

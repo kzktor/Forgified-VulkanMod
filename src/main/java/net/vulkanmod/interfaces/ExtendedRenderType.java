@@ -6,3 +6,4 @@ public interface ExtendedRenderType {
 
     TerrainRenderType getTerrainRenderType();
 }
+

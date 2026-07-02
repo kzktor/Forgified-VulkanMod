@@ -103,8 +103,8 @@ public abstract class GuiElement implements GuiEventListener, NarratableEntry {
     }
 
     @Override
-    public boolean mouseScrolled(double d, double e, double f, double g) {
-        return GuiEventListener.super.mouseScrolled(d, e, f, g);
+    public boolean mouseScrolled(double d, double e, double f) {
+        return GuiEventListener.super.mouseScrolled(d, e, f);
     }
 
     @Override
@@ -165,3 +165,4 @@ public abstract class GuiElement implements GuiEventListener, NarratableEntry {
 
     }
 }
+

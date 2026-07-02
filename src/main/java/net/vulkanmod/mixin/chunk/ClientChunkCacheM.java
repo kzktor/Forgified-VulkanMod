@@ -4,7 +4,6 @@ import net.minecraft.client.multiplayer.ClientChunkCache;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.protocol.game.ClientboundLevelChunkPacketData;
-import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.vulkanmod.render.chunk.ChunkStatusMap;
 import org.jetbrains.annotations.Nullable;
@@ -27,7 +26,8 @@ public class ClientChunkCacheM {
 
     @Inject(method = "drop", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/client/multiplayer/ClientChunkCache$Storage;replace(ILnet/minecraft/world/level/chunk/LevelChunk;Lnet/minecraft/world/level/chunk/LevelChunk;)Lnet/minecraft/world/level/chunk/LevelChunk;"))
-    private void resetChunkStatus(ChunkPos chunkPos, CallbackInfo ci) {
-        ChunkStatusMap.INSTANCE.resetChunkStatus(chunkPos.x, chunkPos.z, ChunkStatusMap.DATA_READY);
+    private void resetChunkStatus(int x, int z, CallbackInfo ci) {
+        ChunkStatusMap.INSTANCE.resetChunkStatus(x, z, ChunkStatusMap.DATA_READY);
     }
 }
+

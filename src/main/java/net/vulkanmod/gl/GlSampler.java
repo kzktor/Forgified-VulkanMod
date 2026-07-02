@@ -79,3 +79,4 @@ public final class GlSampler {
     private final Int2IntOpenHashMap intParams = new Int2IntOpenHashMap();
     private final Int2FloatOpenHashMap floatParams = new Int2FloatOpenHashMap();
 }
+

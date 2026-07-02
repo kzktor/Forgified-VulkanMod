@@ -150,3 +150,4 @@ public class ChunkArea {
         this.drawBuffers.releaseBuffers();
     }
 }
+

@@ -38,3 +38,4 @@ public class MappedBuffer {
         return VUtil.UNSAFE.getInt(ptr + idx);
     }
 }
+

@@ -1,7 +1,6 @@
 package net.vulkanmod.mixin.render.vertex;
 
-import com.mojang.blaze3d.vertex.ByteBufferBuilder;
-import com.mojang.blaze3d.vertex.MeshData;
+import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.VertexBuffer;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.vulkanmod.render.VBO;
@@ -18,7 +17,7 @@ public class VertexBufferM {
     private VBO vbo;
 
     @Inject(method = "<init>", at = @At("RETURN"))
-    private void constructor(VertexBuffer.Usage usage, CallbackInfo ci) {
+    private void constructor(CallbackInfo ci) {
         vbo = new VBO();
     }
 
@@ -32,43 +31,46 @@ public class VertexBufferM {
         return 0;
     }
 
-    @Inject(method = "bind", at = @At("HEAD"), cancellable = true)
+    // The methods below replace vanilla behavior with inject-and-cancel instead of @Overwrite so
+    // other mods' handlers targeting VertexBuffer still apply without a mixin crash.
+
+    // bind
+    @Inject(method = "m_85921_", at = @At("HEAD"), cancellable = true, remap = false)
     private void bind(CallbackInfo ci) {
         ci.cancel();
     }
 
-    @Inject(method = "unbind", at = @At("HEAD"), cancellable = true)
+    // unbind
+    @Inject(method = "m_85931_", at = @At("HEAD"), cancellable = true, remap = false)
     private static void unbind(CallbackInfo ci) {
         ci.cancel();
     }
 
-    @Inject(method = "upload", at = @At("HEAD"), cancellable = true)
-    private void upload(MeshData meshData, CallbackInfo ci) {
-        vbo.upload(meshData);
+    // upload
+    @Inject(method = "m_231221_", at = @At("HEAD"), cancellable = true, remap = false)
+    private void upload(BufferBuilder.RenderedBuffer buffer, CallbackInfo ci) {
+        vbo.upload(buffer);
         ci.cancel();
     }
 
-    @Inject(method = "uploadIndexBuffer(Lcom/mojang/blaze3d/vertex/ByteBufferBuilder$Result;)V", at = @At("HEAD"), cancellable = true)
-    private void uploadIndexBuffer(ByteBufferBuilder.Result result, CallbackInfo ci) {
-        vbo.uploadIndexBuffer(result.byteBuffer());
-        ci.cancel();
-    }
-
-    @Inject(method = "drawWithShader(Lorg/joml/Matrix4f;Lorg/joml/Matrix4f;Lnet/minecraft/client/renderer/ShaderInstance;)V", at = @At("HEAD"), cancellable = true)
+    // drawWithShader
+    @Inject(method = "m_253207_", at = @At("HEAD"), cancellable = true, remap = false)
     private void drawWithShader(Matrix4f viewMatrix, Matrix4f projectionMatrix, ShaderInstance shader, CallbackInfo ci) {
         vbo.drawWithShader(viewMatrix, projectionMatrix, shader);
         ci.cancel();
     }
 
-    @Inject(method = "draw", at = @At("HEAD"), cancellable = true)
+    // draw (chunk layer)
+    @Inject(method = "m_166882_", at = @At("HEAD"), cancellable = true, remap = false)
     private void draw(CallbackInfo ci) {
-        vbo.draw();
+        vbo.drawChunkLayer();
         ci.cancel();
     }
 
-    @Inject(method = "close", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "close", at = @At("HEAD"), cancellable = true, remap = false)
     private void close(CallbackInfo ci) {
         vbo.close();
         ci.cancel();
     }
 }
+

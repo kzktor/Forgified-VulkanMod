@@ -32,22 +32,18 @@ import java.util.Optional;
 @Mixin(Minecraft.class)
 public class MinecraftMixin {
 
-    @Shadow public boolean noRender;
-    @Shadow @Final public Options options;
-
-    @Inject(method = "<init>", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/systems/RenderSystem;initRenderer(IZ)V", shift = At.Shift.AFTER))
-    private void installGlCapabilitiesFallback(GameConfig gameConfig, CallbackInfo ci) {
-        GlCapabilitiesFallback.install();
-    }
+    @Shadow(remap = false) private boolean f_91079_;
+    @Shadow(remap = false) @Final private Options f_91066_;
 
     @Inject(method = "<init>", at = @At(value = "RETURN"))
     private void forceGraphicsMode(GameConfig gameConfig, CallbackInfo ci) {
+        GlCapabilitiesFallback.install();
         clampUnsupportedGraphicsMode();
     }
 
     @Unique
     private void clampUnsupportedGraphicsMode() {
-        var graphicsModeOption = this.options.graphicsMode();
+        var graphicsModeOption = this.f_91066_.graphicsMode();
         GraphicsStatus requested = graphicsModeOption.get();
         GraphicsStatus supported = GraphicsModeCompatibility.coerce(requested);
 
@@ -94,7 +90,7 @@ public class MinecraftMixin {
 
     @Inject(method = "getFramerateLimit", at = @At("HEAD"), cancellable = true)
     private void limitWhenMinimized(CallbackInfoReturnable<Integer> cir) {
-        if(this.noRender) cir.setReturnValue(10);
+        if(this.f_91079_) cir.setReturnValue(10);
     }
 
     @Redirect(method = "runTick", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/systems/TimerQuery;getInstance()Ljava/util/Optional;"))
@@ -104,7 +100,7 @@ public class MinecraftMixin {
 
     @Inject(method = "runTick", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Minecraft;tick()V"),
     locals = LocalCapture.CAPTURE_FAILHARD)
-    private void redirectResourceTick(boolean bl, CallbackInfo ci, Runnable runnable, int i, int j) {
+    private void redirectResourceTick(boolean bl, CallbackInfo ci, long l, Runnable runnable, int i, int j) {
         int n = Math.min(10, i) - 1;
         SpriteUtil.setDoUpload(j == n);
     }
@@ -144,7 +140,8 @@ public class MinecraftMixin {
             net.vulkanmod.Initializer.LOGGER.info("VulkanMod: Handoff is active, forcing vanilla LoadingOverlay instead of FML overlay.");
             return mc;
         }
-        return net.neoforged.fml.loading.ImmediateWindowHandler.loadingOverlay(mc, rm, listener, bl);
+        return net.minecraftforge.fml.loading.ImmediateWindowHandler.loadingOverlay(mc, rm, listener, bl);
     }
 
 }
+

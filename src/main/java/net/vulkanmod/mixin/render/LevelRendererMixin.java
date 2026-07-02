@@ -19,13 +19,13 @@ import java.io.IOException;
 @Mixin(LevelRenderer.class)
 public abstract class LevelRendererMixin {
 
-    @Shadow private @Nullable PostChain entityEffect;
+    @Shadow(remap = false) private @Nullable PostChain f_109412_;
 
-    @Shadow @Final private Minecraft minecraft;
+    @Shadow(remap = false) @Final private Minecraft f_109461_;
 
-    @Shadow @Nullable private RenderTarget entityTarget;
+    @Shadow(remap = false) @Nullable private RenderTarget f_109411_;
 
-    @Shadow @Final private static Logger LOGGER;
+    @Shadow(remap = false) @Final private static Logger f_109453_;
 
 //    /**
 //     * @author

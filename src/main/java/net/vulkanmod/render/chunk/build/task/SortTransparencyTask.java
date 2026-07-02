@@ -55,3 +55,4 @@ public class SortTransparencyTask extends ChunkTask {
         return Result.SUCCESSFUL;
     }
 }
+

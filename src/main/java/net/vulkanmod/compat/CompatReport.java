@@ -85,3 +85,4 @@ public class CompatReport {
         return LogManager.getLogger("VulkanMod-Compat");
     }
 }
+

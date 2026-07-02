@@ -4,3 +4,4 @@ public interface VisibilitySetExtended {
 
     long getVisibility();
 }
+

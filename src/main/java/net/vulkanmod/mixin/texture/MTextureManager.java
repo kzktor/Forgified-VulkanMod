@@ -16,16 +16,16 @@ import java.util.Set;
 @Mixin(TextureManager.class)
 public abstract class MTextureManager {
 
-    @Shadow @Final private Set<Tickable> tickableTextures;
+    @Shadow(remap = false) @Final private Set<Tickable> f_118469_;
 
-    @Overwrite
-    public void tick() {
+    @Overwrite(remap = false)
+    public void m_7673_() {
         if (Renderer.skipRendering || !Initializer.CONFIG.textureAnimations)
             return;
 
         if (SpriteUtil.shouldUpload())
             DeviceManager.getGraphicsQueue().startRecording();
-        for (Tickable tickable : this.tickableTextures) {
+        for (Tickable tickable : this.f_118469_) {
             tickable.tick();
         }
         if (SpriteUtil.shouldUpload()) {
@@ -34,3 +34,4 @@ public abstract class MTextureManager {
         }
     }
 }
+

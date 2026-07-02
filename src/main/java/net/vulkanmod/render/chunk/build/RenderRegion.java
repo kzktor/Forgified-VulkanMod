@@ -275,3 +275,4 @@ public class RenderRegion implements BlockAndTintGetter {
         return blockState == null ? Blocks.AIR.defaultBlockState() : blockState;
     }
 }
+

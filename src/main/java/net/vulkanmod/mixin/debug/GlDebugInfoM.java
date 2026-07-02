@@ -9,23 +9,23 @@ import org.spongepowered.asm.mixin.Unique;
 @Mixin(GlUtil.class)
 public class GlDebugInfoM {
 
-    @Overwrite
-    public static String getVendor() {
+    @Overwrite(remap = false)
+    public static String m_84818_() {
         return Vulkan.getDevice() != null ? Vulkan.getDevice().vendorIdString : "n/a";
     }
 
-    @Overwrite
-    public static String getRenderer() {
+    @Overwrite(remap = false)
+    public static String m_84820_() {
         return Vulkan.getDevice() != null ? Vulkan.getDevice().deviceName : "n/a";
     }
 
-    @Overwrite
-    public static String getOpenGLVersion() {
+    @Overwrite(remap = false)
+    public static String m_84821_() {
         return Vulkan.getDevice() != null ? Vulkan.getDevice().driverVersion : "n/a";
     }
 
-    @Overwrite
-    public static String getCpuInfo() {
+    @Overwrite(remap = false)
+    public static String m_84819_() {
         return vulkanMod$getCpuInfo();
     }
 
@@ -36,3 +36,4 @@ public class GlDebugInfoM {
                 Runtime.getRuntime().availableProcessors());
     }
 }
+

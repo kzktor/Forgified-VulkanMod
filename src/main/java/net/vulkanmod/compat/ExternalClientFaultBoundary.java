@@ -98,3 +98,4 @@ public final class ExternalClientFaultBoundary {
                 key, exception);
     }
 }
+

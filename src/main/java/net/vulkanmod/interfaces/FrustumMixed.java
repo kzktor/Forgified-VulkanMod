@@ -6,3 +6,4 @@ public interface FrustumMixed {
 
     VFrustum customFrustum();
 }
+

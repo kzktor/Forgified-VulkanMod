@@ -329,3 +329,4 @@ public class GL32M {
 
     private static final int GL_COLOR_CLEAR_VALUE = 0x0C22;
 }
+

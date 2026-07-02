@@ -1,9 +1,9 @@
 # VulkanMod NeoForge Unofficial Fork
 
 This repository is an unofficial modified fork of [xCollateral/VulkanMod](https://github.com/xCollateral/VulkanMod).
-It has been modified for Minecraft 1.21.1 on NeoForge and is not the official VulkanMod project.
+It has been modified for Minecraft 1.20.1 on NeoForge and is not the official VulkanMod project.
 
-Prominent modification notice: this fork was modified on 2026-06-19 for NeoForge 1.21.1 compatibility work, release metadata cleanup, and local compatibility fixes.
+Prominent modification notice: this fork was modified on 2026-06-19 for NeoForge 1.20.1 compatibility work, release metadata cleanup, and local compatibility fixes.
 
 ## Attribution
 
@@ -21,7 +21,7 @@ This Ko-fi link supports maintenance of this unofficial NeoForge fork.
 
 ## Features
 
-- NeoForge support for Minecraft 1.21.1.
+- NeoForge support for Minecraft 1.20.1.
 - Vulkan-based renderer that replaces Minecraft's default OpenGL rendering path.
 - Reduced CPU overhead through Vulkan rendering and optimized chunk submission.
 - Chunk rendering and culling optimizations for smoother world rendering.
@@ -37,8 +37,8 @@ The VulkanMod name, logos, CurseForge page, Modrinth page, Discord, and donation
 
 ## Installation
 
-1. Install [NeoForge](https://neoforged.net/) for Minecraft 1.21.1.
-2. Download this fork's `VulkanMod_1.21.1-0.1.0-ALPHA.jar`.
+1. Install [NeoForge](https://neoforged.net/) for Minecraft 1.20.1.
+2. Download this fork's `VulkanMod_1.20.1-0.1.0-ALPHA+1.20.1.jar`.
 3. Put the jar into your Minecraft profile's `mods` folder.
 4. Launch the NeoForge profile.
 

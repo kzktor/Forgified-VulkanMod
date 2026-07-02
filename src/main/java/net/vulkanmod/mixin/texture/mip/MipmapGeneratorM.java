@@ -14,14 +14,14 @@ import org.spongepowered.asm.mixin.Shadow;
 public abstract class MipmapGeneratorM {
     private static final int ALPHA_CUTOFF = 50;
 
-    @Shadow
-    private static float getPow22(int i) {
+    @Shadow(remap = false)
+    private static float m_118040_(int i) {
         return 0;
     }
 
     @SuppressWarnings("UnreachableCode")
-    @Overwrite
-    public static NativeImage[] generateMipLevels(NativeImage[] nativeImages, int i) {
+    @Overwrite(remap = false)
+    public static NativeImage[] m_246246_(NativeImage[] nativeImages, int i) {
         if (i + 1 <= nativeImages.length) {
             return nativeImages;
         } else {
@@ -118,10 +118,10 @@ public abstract class MipmapGeneratorM {
     }
 
     private static int gammaBlend(int i, int j, int k, int l, int m) {
-        float f = getPow22(i >> m);
-        float g = getPow22(j >> m);
-        float h = getPow22(k >> m);
-        float n = getPow22(l >> m);
+        float f = m_118040_(i >> m);
+        float g = m_118040_(j >> m);
+        float h = m_118040_(k >> m);
+        float n = m_118040_(l >> m);
         float o = (float)((double)((float)Math.pow((double)(f + g + h + n) * 0.25, 0.45454545454545453)));
         return (int)((double)o * 255.0);
     }
@@ -169,3 +169,4 @@ public abstract class MipmapGeneratorM {
         return (sumR & 0xFF) | ((sumG & 0xFF) << 8) | ((sumB & 0xFF) << 16) | (0xFF << 24);
     }
 }
+

@@ -24,26 +24,26 @@ import static net.vulkanmod.Initializer.getVersion;
 @Mixin(DebugScreenOverlay.class)
 public abstract class DebugScreenOverlayM {
 
-    @Shadow
+    @Shadow(remap = false)
     @Final
-    private Minecraft minecraft;
+    private Minecraft f_94030_;
 
-    @Shadow
-    private static long bytesToMegabytes(long bytes) {
+    @Shadow(remap = false)
+    private static long m_94050_(long bytes) {
         return 0;
     }
 
-    @Shadow
+    @Shadow(remap = false)
     @Final
-    private Font font;
+    private Font f_94031_;
 
-    @Shadow
-    protected abstract List<String> getGameInformation();
+    @Shadow(remap = false)
+    protected abstract List<String> m_94075_();
 
-    @Shadow
-    protected abstract List<String> getSystemInformation();
+    @Shadow(remap = false)
+    protected abstract List<String> m_94078_();
 
-    @Redirect(method = "getSystemInformation", at = @At(value = "INVOKE", target = "Lcom/google/common/collect/Lists;newArrayList([Ljava/lang/Object;)Ljava/util/ArrayList;"))
+    @Redirect(method = "m_94078_", at = @At(value = "INVOKE", target = "Lcom/google/common/collect/Lists;newArrayList([Ljava/lang/Object;)Ljava/util/ArrayList;", remap = false), remap = false)
     private ArrayList<String> redirectList(Object[] elements) {
         ArrayList<String> strings = new ArrayList<>();
 
@@ -55,8 +55,8 @@ public abstract class DebugScreenOverlayM {
         Device device = Vulkan.getDevice();
 
         strings.add(String.format("Java: %s", System.getProperty("java.version")));
-        strings.add(String.format("Mem: % 2d%% %03d/%03dMB", usedMemory * 100L / maxMemory, bytesToMegabytes(usedMemory), bytesToMegabytes(maxMemory)));
-        strings.add(String.format("Allocated: % 2d%% %03dMB", totalMemory * 100L / maxMemory, bytesToMegabytes(totalMemory)));
+        strings.add(String.format("Mem: % 2d%% %03d/%03dMB", usedMemory * 100L / maxMemory, m_94050_(usedMemory), m_94050_(maxMemory)));
+        strings.add(String.format("Allocated: % 2d%% %03dMB", totalMemory * 100L / maxMemory, m_94050_(totalMemory)));
         strings.add(String.format("Off-heap: " + getOffHeapMemory() + "MB"));
         strings.add("NativeMemory: %dMB".formatted(MemoryManager.getInstance().getNativeMemoryMB()));
         strings.add("DeviceMemory: %dMB".formatted(MemoryManager.getInstance().getAllocatedDeviceMemoryMB()));
@@ -75,7 +75,7 @@ public abstract class DebugScreenOverlayM {
     }
 
     private long getOffHeapMemory() {
-        return bytesToMegabytes(ManagementFactory.getMemoryMXBean().getNonHeapMemoryUsage().getUsed());
+        return m_94050_(ManagementFactory.getMemoryMXBean().getNonHeapMemoryUsage().getUsed());
     }
 
     @Unique
@@ -85,3 +85,4 @@ public abstract class DebugScreenOverlayM {
                 Runtime.getRuntime().availableProcessors());
     }
 }
+

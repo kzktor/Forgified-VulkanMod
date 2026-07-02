@@ -62,3 +62,4 @@ public class RenderPathOwnership {
         return getPathMode(path) != CompatMode.OFF;
     }
 }
+

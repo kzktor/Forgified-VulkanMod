@@ -32,6 +32,7 @@ public class Device {
     public final VkPhysicalDeviceVulkan11Features availableFeatures11;
 
     private boolean drawIndirectSupported;
+    private final boolean portabilitySubset;
 
     public Device(VkPhysicalDevice device) {
         this.physicalDevice = device;
@@ -57,6 +58,9 @@ public class Device {
         if (this.availableFeatures.features().multiDrawIndirect() && this.availableFeatures11.shaderDrawParameters())
             this.drawIndirectSupported = true;
 
+        // On portability drivers (MoltenVK) VK_KHR_portability_subset is mandatory to enable if present.
+        this.portabilitySubset = getUnsupportedExtensions(
+                Set.of(KHRPortabilitySubset.VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME)).isEmpty();
     }
 
     private static String decodeVendor(int i) {
@@ -102,25 +106,30 @@ public class Device {
     }
 
     public Set<String> getUnsupportedExtensions(Set<String> requiredExtensions) {
+        Set<String> unsupportedExtensions = new HashSet<>(requiredExtensions);
+        unsupportedExtensions.removeAll(getAvailableExtensions(physicalDevice));
+        return unsupportedExtensions;
+    }
+
+    // Heap-allocates the extension buffer: some drivers (e.g. NVIDIA) expose ~240 device extensions,
+    // which would overflow the small thread-local LWJGL MemoryStack ("Out of stack space" on init).
+    static Set<String> getAvailableExtensions(VkPhysicalDevice physicalDevice) {
         try (MemoryStack stack = stackPush()) {
 
             IntBuffer extensionCount = stack.ints(0);
 
             vkEnumerateDeviceExtensionProperties(physicalDevice, (String) null, extensionCount, null);
 
-            VkExtensionProperties.Buffer availableExtensions = VkExtensionProperties.malloc(extensionCount.get(0),
-                    stack);
+            VkExtensionProperties.Buffer availableExtensions = VkExtensionProperties.malloc(extensionCount.get(0));
+            try {
+                vkEnumerateDeviceExtensionProperties(physicalDevice, (String) null, extensionCount, availableExtensions);
 
-            vkEnumerateDeviceExtensionProperties(physicalDevice, (String) null, extensionCount, availableExtensions);
-
-            Set<String> extensions = availableExtensions.stream()
-                    .map(VkExtensionProperties::extensionNameString)
-                    .collect(toSet());
-
-            Set<String> unsupportedExtensions = new HashSet<>(requiredExtensions);
-            unsupportedExtensions.removeAll(extensions);
-
-            return unsupportedExtensions;
+                return availableExtensions.stream()
+                        .map(VkExtensionProperties::extensionNameString)
+                        .collect(toSet());
+            } finally {
+                availableExtensions.free();
+            }
         }
     }
 
@@ -140,9 +149,15 @@ public class Device {
         return vendorId == 0x8086;
     }
 
+    // True when this GPU exposes VK_KHR_portability_subset (MoltenVK); it must then be enabled on the logical device.
+    public boolean isPortabilitySubset() {
+        return portabilitySubset;
+    }
+
     public void free() {
         this.properties.free();
         this.availableFeatures11.free();
         this.availableFeatures.free();
     }
 }
+

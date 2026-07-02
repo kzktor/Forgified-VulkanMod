@@ -20,9 +20,9 @@ import static net.vulkanmod.render.model.quad.ModelQuad.VERTEX_SIZE;
 @Mixin(BakedQuad.class)
 public class BakedQuadM implements QuadView {
 
-    @Shadow @Final protected int[] vertices;
-    @Shadow @Final protected Direction direction;
-    @Shadow @Final protected int tintIndex;
+    @Shadow(remap = false) @Final protected int[] f_111292_;
+    @Shadow(remap = false) @Final protected Direction f_111294_;
+    @Shadow(remap = false) @Final protected int f_111293_;
     private int flags;
 
     @ModifyVariable(method = "<init>", at = @At("HEAD"), argsOnly = true, ordinal = 0)
@@ -32,7 +32,7 @@ public class BakedQuadM implements QuadView {
 
     @Inject(method = "<init>", at = @At("RETURN"))
     private void onInit(int[] vertices, int tintIndex, Direction direction, TextureAtlasSprite textureAtlasSprite, boolean shade, CallbackInfo ci) {
-        this.flags = ModelQuadFlags.getQuadFlags(this.vertices, direction);
+        this.flags = ModelQuadFlags.getQuadFlags(this.f_111292_, direction);
     }
 
     @Override
@@ -42,50 +42,51 @@ public class BakedQuadM implements QuadView {
 
     @Override
     public float getX(int idx) {
-        return Float.intBitsToFloat(this.vertices[vertexOffset(idx) + 0]);
+        return Float.intBitsToFloat(this.f_111292_[vertexOffset(idx) + 0]);
     }
 
     @Override
     public float getY(int idx) {
-        return Float.intBitsToFloat(this.vertices[vertexOffset(idx) + 1]);
+        return Float.intBitsToFloat(this.f_111292_[vertexOffset(idx) + 1]);
     }
 
     @Override
     public float getZ(int idx) {
-        return Float.intBitsToFloat(this.vertices[vertexOffset(idx) + 2]);
+        return Float.intBitsToFloat(this.f_111292_[vertexOffset(idx) + 2]);
     }
 
     @Override
     public int getColor(int idx) {
-        return this.vertices[vertexOffset(idx) + 3];
+        return this.f_111292_[vertexOffset(idx) + 3];
     }
 
     @Override
     public float getU(int idx) {
-        return Float.intBitsToFloat(this.vertices[vertexOffset(idx) + 4]);
+        return Float.intBitsToFloat(this.f_111292_[vertexOffset(idx) + 4]);
     }
 
     @Override
     public float getV(int idx) {
-        return Float.intBitsToFloat(this.vertices[vertexOffset(idx) + 5]);
+        return Float.intBitsToFloat(this.f_111292_[vertexOffset(idx) + 5]);
     }
 
     @Override
     public int getColorIndex() {
-        return this.tintIndex;
+        return this.f_111293_;
     }
 
     @Override
     public Direction getFacingDirection() {
-        return this.direction;
+        return this.f_111294_;
     }
 
     @Override
     public boolean isTinted() {
-        return this.tintIndex != -1;
+        return this.f_111293_ != -1;
     }
 
     private static int vertexOffset(int vertexIndex) {
         return vertexIndex * VERTEX_SIZE;
     }
 }
+

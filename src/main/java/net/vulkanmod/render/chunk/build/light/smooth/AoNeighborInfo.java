@@ -320,3 +320,4 @@ enum AoNeighborInfo {
         cornersBits[12 + 11] = idxs[4 + 0];
     }
 }
+

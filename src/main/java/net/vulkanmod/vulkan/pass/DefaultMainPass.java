@@ -292,3 +292,4 @@ public class DefaultMainPass implements MainPass {
         return Vulkan.getSwapChain().getDepthAttachmentGlId();
     }
 }
+

@@ -9,3 +9,4 @@ public interface ShaderMixed {
 
     GraphicsPipeline getPipeline(VertexFormat drawFormat);
 }
+

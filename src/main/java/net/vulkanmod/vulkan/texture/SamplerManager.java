@@ -114,3 +114,4 @@ public abstract class SamplerManager {
     public static final byte REDUCTION_MIN_BIT = 0b10000;
     public static final byte REDUCTION_MAX_BIT = 0b100000;
 }
+

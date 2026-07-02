@@ -30,3 +30,4 @@ public class RenderTypeM implements ExtendedRenderType {
         return terrainRenderType;
     }
 }
+

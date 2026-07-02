@@ -22,3 +22,4 @@ public final class TerrainRenderState {
         Renderer.resetScissor();
     }
 }
+

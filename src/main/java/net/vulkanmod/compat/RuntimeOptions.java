@@ -37,3 +37,4 @@ public final class RuntimeOptions {
         return net.vulkanmod.compat.capabilities.ExternalRenderPathOptions.externalLodDebugDrawEnabled();
     }
 }
+

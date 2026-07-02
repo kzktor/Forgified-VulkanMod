@@ -62,3 +62,4 @@ public class FlatLightPipeline implements LightPipeline {
         return LightDataAccess.getLightmap(adjWord);
     }
 }
+

@@ -13,6 +13,7 @@ import net.vulkanmod.vulkan.shader.Pipeline;
 import net.vulkanmod.vulkan.util.VUtil;
 import net.vulkanmod.vulkan.util.VkResult;
 import org.lwjgl.PointerBuffer;
+import org.lwjgl.system.Configuration;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.util.vma.VmaAllocatorCreateInfo;
 import org.lwjgl.util.vma.VmaVulkanFunctions;
@@ -34,6 +35,8 @@ import static org.lwjgl.util.vma.Vma.vmaCreateAllocator;
 import static org.lwjgl.util.vma.Vma.vmaDestroyAllocator;
 import static org.lwjgl.vulkan.EXTDebugUtils.*;
 import static org.lwjgl.vulkan.KHRDynamicRendering.VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME;
+import static org.lwjgl.vulkan.KHRPortabilityEnumeration.VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+import static org.lwjgl.vulkan.KHRPortabilityEnumeration.VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME;
 import static org.lwjgl.vulkan.KHRSwapchain.VK_KHR_SWAPCHAIN_EXTENSION_NAME;
 import static org.lwjgl.vulkan.VK10.*;
 import static org.lwjgl.vulkan.VK12.VK_API_VERSION_1_2;
@@ -120,6 +123,10 @@ public class Vulkan {
     private static VkInstance instance;
     private static long debugMessenger;
     private static long surface;
+
+    // True when running on a portability driver (e.g. MoltenVK on macOS): the instance
+    // must opt into portability enumeration to see the GPU.
+    private static boolean portabilityEnumeration = false;
 
     private static SwapChain swapChain;
 
@@ -216,6 +223,14 @@ public class Vulkan {
             throw new RuntimeException("Validation requested but not supported");
         }
 
+        // MoltenVK (macOS) and other portability ICDs advertise this instance extension;
+        // when present we must enable it and set the portability flag or no GPU is enumerated.
+        // Done in its own stack frame so the enumeration buffer is released before instance creation.
+        try (MemoryStack stack = stackPush()) {
+            portabilityEnumeration = getAvailableInstanceExtensions(stack)
+                    .contains(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+        }
+
         try (MemoryStack stack = stackPush()) {
 
             VkApplicationInfo appInfo = VkApplicationInfo.calloc(stack);
@@ -231,7 +246,12 @@ public class Vulkan {
 
             createInfo.sType(VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO);
             createInfo.pApplicationInfo(appInfo);
-            createInfo.ppEnabledExtensionNames(getRequiredInstanceExtensions());
+            createInfo.ppEnabledExtensionNames(getRequiredInstanceExtensions(stack));
+
+            if (portabilityEnumeration) {
+                createInfo.flags(createInfo.flags() | VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR);
+                Initializer.LOGGER.info("VulkanMod: portability driver detected (MoltenVK); enabling portability enumeration.");
+            }
 
             if (ENABLE_VALIDATION_LAYERS) {
 
@@ -247,8 +267,56 @@ public class Vulkan {
             int result = vkCreateInstance(createInfo, null, instancePtr);
             checkResult(result, "Failed to create instance");
 
-            instance = new VkInstance(instancePtr.get(0), createInfo);
+            instance = createVkInstance(instancePtr.get(0), createInfo);
         }
+    }
+
+    // LWJGL's VkInstance constructor enumerates every device's extensions on the calling thread's
+    // MemoryStack. On systems with many extensions (e.g. hybrid Intel+NVIDIA laptops) this overflows
+    // the render thread's small (64 KB) stack with "Out of stack space". The stack size is fixed when
+    // a thread first touches a MemoryStack, so raising Configuration.STACK_SIZE on the render thread is
+    // too late. Instead we build the instance on a fresh thread whose larger stack honours the setting.
+    private static VkInstance createVkInstance(long handle, VkInstanceCreateInfo createInfo) {
+        final VkInstance[] result = new VkInstance[1];
+        final Throwable[] error = new Throwable[1];
+
+        Integer previousStackSize = Configuration.STACK_SIZE.get(64);
+        Configuration.STACK_SIZE.set(Math.max(previousStackSize, 1024)); // KB
+
+        Thread initThread = new Thread(() -> {
+            try {
+                result[0] = new VkInstance(handle, createInfo);
+            } catch (Throwable t) {
+                error[0] = t;
+            }
+        }, "VulkanMod-InstanceInit");
+
+        try {
+            initThread.start();
+            initThread.join();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Interrupted while creating Vulkan instance", e);
+        } finally {
+            Configuration.STACK_SIZE.set(previousStackSize);
+        }
+
+        if (error[0] != null) {
+            throw new RuntimeException("Failed to initialize Vulkan instance.", error[0]);
+        }
+        return result[0];
+    }
+
+    private static Set<String> getAvailableInstanceExtensions(MemoryStack stack) {
+        IntBuffer extensionCount = stack.ints(0);
+        vkEnumerateInstanceExtensionProperties((String) null, extensionCount, null);
+
+        VkExtensionProperties.Buffer availableExtensions = VkExtensionProperties.malloc(extensionCount.get(0), stack);
+        vkEnumerateInstanceExtensionProperties((String) null, extensionCount, availableExtensions);
+
+        return availableExtensions.stream()
+                .map(VkExtensionProperties::extensionNameString)
+                .collect(toSet());
     }
 
     static boolean checkValidationLayerSupport() {
@@ -410,23 +478,30 @@ public class Vulkan {
 
     }
 
-    private static PointerBuffer getRequiredInstanceExtensions() {
+    private static PointerBuffer getRequiredInstanceExtensions(MemoryStack stack) {
 
         PointerBuffer glfwExtensions = glfwGetRequiredInstanceExtensions();
 
-        if (ENABLE_VALIDATION_LAYERS) {
-
-            MemoryStack stack = stackGet();
-
-            PointerBuffer extensions = stack.mallocPointer(glfwExtensions.capacity() + 1);
-
-            extensions.put(glfwExtensions);
-            extensions.put(stack.UTF8(VK_EXT_DEBUG_UTILS_EXTENSION_NAME));
-
-            return extensions.rewind();
+        if (glfwExtensions == null) {
+            throw new RuntimeException("GLFW could not find the Vulkan loader / required instance extensions.");
         }
 
-        return glfwExtensions;
+        int extra = (ENABLE_VALIDATION_LAYERS ? 1 : 0) + (portabilityEnumeration ? 1 : 0);
+        if (extra == 0) {
+            return glfwExtensions;
+        }
+
+        PointerBuffer extensions = stack.mallocPointer(glfwExtensions.capacity() + extra);
+        extensions.put(glfwExtensions);
+
+        if (ENABLE_VALIDATION_LAYERS) {
+            extensions.put(stack.UTF8(VK_EXT_DEBUG_UTILS_EXTENSION_NAME));
+        }
+        if (portabilityEnumeration) {
+            extensions.put(stack.UTF8(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME));
+        }
+
+        return extensions.rewind();
     }
 
     public static void checkResult(int result, String errorMessage) {
@@ -466,4 +541,5 @@ public class Vulkan {
         return DeviceManager.device;
     }
 }
+
 

@@ -46,3 +46,4 @@ public class EntityOutlineGeneratorM implements ExtendedVertexBuilder {
         this.extDelegate.vertex(x, y, z, this.vulkanmod$outlineColor, u, v, overlay, light, packedNormal);
     }
 }
+

@@ -352,3 +352,4 @@ public class GlStateManagerM {
     @Overwrite(remap = false)
     public static void _disableVertexAttribArray(int i) {}
 }
+

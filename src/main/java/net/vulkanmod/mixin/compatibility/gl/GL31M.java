@@ -194,3 +194,4 @@ public class GL31M {
     public static void glTexBuffer(@NativeType("GLenum") int target, @NativeType("GLenum") int internalformat, @NativeType("GLuint") int buffer) {
     }
 }
+

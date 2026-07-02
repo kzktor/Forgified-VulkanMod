@@ -62,3 +62,4 @@ public class ARBVertexArrayObjectM {
         return GlVertexArray.isVertexArray(array);
     }
 }
+

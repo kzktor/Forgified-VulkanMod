@@ -8,3 +8,4 @@ public abstract class GraphDirections {
     public static final int WEST = 4;
     public static final int EAST = 5;
 }
+

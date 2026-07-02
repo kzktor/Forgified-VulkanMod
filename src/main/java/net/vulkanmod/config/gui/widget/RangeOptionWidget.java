@@ -126,3 +126,4 @@ public class RangeOptionWidget extends OptionWidget<RangeOption> {
         }
     }
 }
+

@@ -22,7 +22,7 @@ import java.util.List;
 
 public class VOptionScreen extends Screen {
     public final static int RED = ColorUtil.ARGB.pack(0.3f, 0.0f, 0.0f, 0.8f);
-    final ResourceLocation ICON = ResourceLocation.fromNamespaceAndPath("vulkanmod", "vlogo_transparent.png");
+    final ResourceLocation ICON = new ResourceLocation("vulkanmod", "vlogo_transparent.png");
 
     private final Screen parent;
 
@@ -86,14 +86,14 @@ public class VOptionScreen extends Screen {
         int itemHeight = 20;
 
         int leftMargin = 100;
-
+//        int listWidth = (int) (this.width * 0.65f);
         int listWidth = Math.min((int) (this.width * 0.65f), 420);
         int listHeight = this.height - top - bottom;
 
         this.buildLists(leftMargin, top, listWidth, listHeight, itemHeight);
 
         int x = leftMargin + listWidth + 10;
-
+//        int width = Math.min(this.width - this.tooltipX - 10, 200);
         int width = this.width - x - 10;
         int y = 50;
 
@@ -143,6 +143,7 @@ public class VOptionScreen extends Screen {
         this.pageButtons.clear();
         this.clearWidgets();
 
+//        this.addPageButtons(20, 6, 60, 20, false);
         this.addPageButtons(10, 40, 80, 22, true);
 
         VOptionList currentList = this.optionPages.get(this.currentListIdx).getOptionList();
@@ -182,7 +183,7 @@ public class VOptionScreen extends Screen {
                 x0, 6,
                 buttonWidth, buttonHeight,
                 Component.translatable("vulkanmod.options.buttons.kofi"),
-                button -> Util.getPlatform().openUri("https://ko-fi.com/rindw")
+                button -> Util.getPlatform().openUri("https://ko-fi.com/xcollateral")
         );
 
         this.buttons.add(this.applyButton);
@@ -225,24 +226,24 @@ public class VOptionScreen extends Screen {
     }
 
     @Override
-    public void renderBackground(GuiGraphics guiGraphics, int i, int j, float f) {
-        if (this.minecraft.level == null) {
-            this.renderPanorama(guiGraphics, f);
-            this.renderBlurredBackground(f);
-            this.renderMenuBackground(guiGraphics);
+    public void renderBackground(GuiGraphics guiGraphics) {
+        if (this.minecraft.level != null) {
+            super.renderBackground(guiGraphics);
         } else {
-            this.renderBlurredBackground(f);
-            this.renderTransparentBackground(guiGraphics);
+            this.renderDirtBackground(guiGraphics);
+            RenderSystem.enableBlend();
+            GuiRenderer.fillGradient(0, 0, this.width, this.height,
+                    ColorUtil.ARGB.pack(0.0f, 0.0f, 0.0f, 0.2f), ColorUtil.ARGB.pack(0.0f, 0.0f, 0.0f, 0.3f));
         }
 
     }
 
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float delta) {
-        this.renderBackground(guiGraphics, 0, 0, delta);
-
         GuiRenderer.guiGraphics = guiGraphics;
         GuiRenderer.setPoseStack(guiGraphics.pose());
+
+        this.renderBackground(guiGraphics);
 
         RenderSystem.enableBlend();
 
@@ -275,6 +276,8 @@ public class VOptionScreen extends Screen {
         int color = ColorUtil.ARGB.pack(intensity, intensity, intensity, 0.6f);
         GuiRenderer.fill(x - padding, y - padding, x + width + padding, y + height + padding, color);
 
+//        intensity = 0.4f;
+//        color = ColorUtil.ARGB.pack(intensity, intensity, intensity, 0.9f);
         color = RED;
         GuiRenderer.renderBorder(x - padding, y - padding, x + width + padding, y + height + padding, 1, color);
 
@@ -321,21 +324,6 @@ public class VOptionScreen extends Screen {
         }
 
         Initializer.CONFIG.write();
-        rebuildPagesFromCurrentOptions();
-    }
-
-    private void rebuildPagesFromCurrentOptions() {
-        this.addPages();
-
-        int top = 40;
-        int bottom = 60;
-        int itemHeight = 20;
-        int leftMargin = 100;
-        int listWidth = Math.min((int) (this.width * 0.65f), 420);
-        int listHeight = this.height - top - bottom;
-
-        this.buildLists(leftMargin, top, listWidth, listHeight, itemHeight);
-        this.buildPage();
-        this.applyButton.active = false;
     }
 }
+

@@ -13,8 +13,8 @@ public class MainTargetMixin extends RenderTarget {
         super(useDepth);
     }
 
-    @Overwrite
-    private void createFrameBuffer(int width, int height) {
+    @Overwrite(remap = false)
+    private void m_166141_(int width, int height) {
         this.viewWidth = width;
         this.viewHeight = height;
         this.width = width;
@@ -41,3 +41,4 @@ public class MainTargetMixin extends RenderTarget {
         return Renderer.getInstance().getMainPass().getDepthAttachmentGlId();
     }
 }
+

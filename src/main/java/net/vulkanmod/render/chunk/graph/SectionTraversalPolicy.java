@@ -8,3 +8,4 @@ final class SectionTraversalPolicy {
         return smartCull && !spectatorInsideSolid && hasSkyLight;
     }
 }
+

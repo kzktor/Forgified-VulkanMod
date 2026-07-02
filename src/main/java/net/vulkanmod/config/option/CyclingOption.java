@@ -76,3 +76,4 @@ public class CyclingOption<E> extends Option<E> {
         return values;
     }
 }
+

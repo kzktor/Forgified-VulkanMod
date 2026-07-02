@@ -8,40 +8,41 @@ import net.vulkanmod.vulkan.shader.Pipeline;
 import net.vulkanmod.vulkan.texture.VTextureSelector;
 import net.vulkanmod.vulkan.texture.VulkanImage;
 import org.joml.Matrix4f;
-import org.joml.Matrix4fStack;
 
 public class DrawUtil {
 
     public static void blitQuad() {
-        blitQuad(0.0f, 1.0f, 1.0f, 0.0f);
+        blitQuad(0.0, 1.0, 1.0, 0.0);
     }
 
-    public static void drawTexQuad(BufferBuilder builder, float x0, float y0, float x1, float y1, float z,
+    public static void drawTexQuad(BufferBuilder builder, double x0, double y0, double x1, double y1, double z,
                                    float u0, float v0, float u1, float v1) {
         Tesselator tesselator = RenderSystem.renderThreadTesselator();
-        BufferBuilder bufferBuilder = tesselator.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
-        bufferBuilder.addVertex(x0, y0, z).setUv(0.0F, 1.0F);
-        bufferBuilder.addVertex(x1, y0, z).setUv(1.0F, 1.0F);
-        bufferBuilder.addVertex(x1, y1, z).setUv(1.0F, 0.0F);
-        bufferBuilder.addVertex(x0, y1, z).setUv(0.0F, 0.0F);
+        BufferBuilder bufferbuilder = tesselator.getBuilder();
+        bufferbuilder.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
+        bufferbuilder.vertex(x0, y0, z).uv(0.0F, 1.0F).endVertex();
+        bufferbuilder.vertex(x1, y0, z).uv(1.0F, 1.0F).endVertex();
+        bufferbuilder.vertex(x1, y1, z).uv(1.0F, 0.0F).endVertex();
+        bufferbuilder.vertex(x0, y1, z).uv(0.0F, 0.0F).endVertex();
 
-        MeshData meshData = bufferBuilder.buildOrThrow();
+        BufferBuilder.RenderedBuffer renderedBuffer = bufferbuilder.end();
 
-        Renderer.getDrawer().draw(meshData.vertexBuffer(), VertexFormat.Mode.QUADS, meshData.drawState().format(), meshData.drawState().vertexCount());
+        Renderer.getDrawer().draw(renderedBuffer.vertexBuffer(), VertexFormat.Mode.QUADS, renderedBuffer.drawState().format(), renderedBuffer.drawState().vertexCount());
 
     }
 
-    public static void blitQuad(float x0, float y0, float x1, float y1) {
+    public static void blitQuad(double x0, double y0, double x1, double y1) {
         Tesselator tesselator = RenderSystem.renderThreadTesselator();
-        BufferBuilder bufferBuilder = tesselator.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
-        bufferBuilder.addVertex(x0, y0, 0.0f).setUv(0.0F, 1.0F);
-        bufferBuilder.addVertex(x1, y0, 0.0f).setUv(1.0F, 1.0F);
-        bufferBuilder.addVertex(x1, y1, 0.0f).setUv(1.0F, 0.0F);
-        bufferBuilder.addVertex(x0, y1, 0.0f).setUv(0.0F, 0.0F);
+        BufferBuilder bufferbuilder = tesselator.getBuilder();
+        bufferbuilder.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
+        bufferbuilder.vertex(x0, y0, 0.0D).uv(0.0F, 1.0F).endVertex();
+        bufferbuilder.vertex(x1, y0, 0.0D).uv(1.0F, 1.0F).endVertex();
+        bufferbuilder.vertex(x1, y1, 0.0D).uv(1.0F, 0.0F).endVertex();
+        bufferbuilder.vertex(x0, y1, 0.0D).uv(0.0F, 0.0F).endVertex();
 
-        MeshData meshData = bufferBuilder.buildOrThrow();
+        BufferBuilder.RenderedBuffer renderedBuffer = bufferbuilder.end();
 
-        Renderer.getDrawer().draw(meshData.vertexBuffer(), VertexFormat.Mode.QUADS, meshData.drawState().format(), meshData.drawState().vertexCount());
+        Renderer.getDrawer().draw(renderedBuffer.vertexBuffer(), VertexFormat.Mode.QUADS, renderedBuffer.drawState().format(), renderedBuffer.drawState().vertexCount());
 
     }
 
@@ -53,14 +54,15 @@ public class DrawUtil {
 
         Matrix4f matrix4f = new Matrix4f().setOrtho(0.0F, 1.0F, 0.0F, 1.0F, 0.0F, 1.0F, true);
         RenderSystem.setProjectionMatrix(matrix4f, VertexSorting.DISTANCE_TO_ORIGIN);
-        Matrix4fStack posestack = RenderSystem.getModelViewStack();
-        posestack.pushMatrix();
-        posestack.identity();
+        PoseStack posestack = RenderSystem.getModelViewStack();
+        posestack.pushPose();
+        posestack.setIdentity();
         RenderSystem.applyModelViewMatrix();
-        posestack.popMatrix();
+        posestack.popPose();
 
         Renderer.getInstance().uploadAndBindUBOs(pipeline);
 
-        blitQuad(0.0f, 0.0f, 1.0f, 1.0f);
+        blitQuad(0.0D, 0.0D, 1.0D, 1.0D);
     }
 }
+

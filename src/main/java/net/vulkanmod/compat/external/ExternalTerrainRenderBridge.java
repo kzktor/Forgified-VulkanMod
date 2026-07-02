@@ -373,3 +373,4 @@ public final class ExternalTerrainRenderBridge {
     record IndexUpload(IndexBuffer buffer, int version, int offset, int size, IndexBuffer.IndexType type, int maxIndex) {
     }
 }
+

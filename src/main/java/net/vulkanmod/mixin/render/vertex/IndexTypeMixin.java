@@ -10,8 +10,8 @@ public class IndexTypeMixin {
     /**
      * @author
      */
-    @Overwrite
-    public static VertexFormat.IndexType least(int number) {
+    @Overwrite(remap = false)
+    public static VertexFormat.IndexType m_166933_(int number) {
         return VertexFormat.IndexType.SHORT;
     }
 }

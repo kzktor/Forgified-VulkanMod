@@ -79,7 +79,7 @@ public class CompatProfiler {
 
         Minecraft.getInstance().gui.getChat().addMessage(
             net.minecraft.network.chat.Component.literal(
-                "§6[CompatProfiler] Starting 300-frame benchmark phase: " + (activePhase ? "§aCOMPAT / OBSERVE" : "§bBASELINE")
+                "Â§6[CompatProfiler] Starting 300-frame benchmark phase: " + (activePhase ? "Â§aCOMPAT / OBSERVE" : "Â§bBASELINE")
             )
         );
     }
@@ -159,12 +159,12 @@ public class CompatProfiler {
 
             Minecraft.getInstance().gui.getChat().addMessage(
                 net.minecraft.network.chat.Component.literal(
-                    "§a[CompatProfiler] Baseline completed! FPS: " + String.format("%.2f", avgFps) + " | 1% Lows: " + String.format("%.2f", lowFps)
+                    "Â§a[CompatProfiler] Baseline completed! FPS: " + String.format("%.2f", avgFps) + " | 1% Lows: " + String.format("%.2f", lowFps)
                 )
             );
             Minecraft.getInstance().gui.getChat().addMessage(
                 net.minecraft.network.chat.Component.literal(
-                    "§eToggle compatibility options / OBSERVE mode, then press Left ALT + F10 again for the COMPAT phase."
+                    "Â§eToggle compatibility options / OBSERVE mode, then press Left ALT + F10 again for the COMPAT phase."
                 )
             );
         } else {
@@ -291,13 +291,13 @@ public class CompatProfiler {
             writer.write(sb.toString());
             Minecraft.getInstance().gui.getChat().addMessage(
                 net.minecraft.network.chat.Component.literal(
-                    "§a[CompatProfiler] Benchmark complete! Saved performance profile comparison report to: §evulkanmod_compat_profile.txt"
+                    "Â§a[CompatProfiler] Benchmark complete! Saved performance profile comparison report to: Â§evulkanmod_compat_profile.txt"
                 )
             );
         } catch (IOException e) {
             Minecraft.getInstance().gui.getChat().addMessage(
                 net.minecraft.network.chat.Component.literal(
-                    "§c[CompatProfiler] Failed to write report: " + e.getMessage()
+                    "Â§c[CompatProfiler] Failed to write report: " + e.getMessage()
                 )
             );
         }
@@ -311,3 +311,4 @@ public class CompatProfiler {
         return baselineCompleted;
     }
 }
+

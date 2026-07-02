@@ -224,3 +224,4 @@ public class ARBFramebufferObjectM {
         GlTexture.generateMipmap(target);
     }
 }
+

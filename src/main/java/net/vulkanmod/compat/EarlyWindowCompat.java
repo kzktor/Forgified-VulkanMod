@@ -23,7 +23,7 @@ public class EarlyWindowCompat {
 
     public static void disableFmlEarlyWindowProvider() {
         try {
-            Class<?> clazz = Class.forName("net.neoforged.fml.loading.ImmediateWindowHandler");
+            Class<?> clazz = Class.forName("net.minecraftforge.fml.loading.ImmediateWindowHandler");
             Field providerField = clazz.getDeclaredField("provider");
             providerField.setAccessible(true);
             providerField.set(null, createNoOpProvider(providerField.getType()));
@@ -66,7 +66,7 @@ public class EarlyWindowCompat {
 
     private static void disableProgressWindowTick() {
         try {
-            Class<?> loaderClass = Class.forName("net.neoforged.fml.loading.FMLLoader");
+            Class<?> loaderClass = Class.forName("net.minecraftforge.fml.loading.FMLLoader");
             Field tickField = loaderClass.getDeclaredField("progressWindowTick");
             tickField.setAccessible(true);
             tickField.set(null, (Runnable) () -> { });
@@ -74,3 +74,4 @@ public class EarlyWindowCompat {
         }
     }
 }
+

@@ -8,3 +8,4 @@ public class ComputeQueue extends Queue {
         super(stack, familyIndex);
     }
 }
+

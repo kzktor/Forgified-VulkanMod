@@ -47,3 +47,4 @@ public abstract class Matrix4fM {
         return new Matrix4f().setPerspective(fovy, aspect, zNear, zFar, true);
     }
 }
+

@@ -15,3 +15,4 @@ public interface ParticleAccessor {
     @Accessor("z")
     double getZ();
 }
+

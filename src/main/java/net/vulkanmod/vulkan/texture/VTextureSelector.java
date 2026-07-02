@@ -69,7 +69,7 @@ public abstract class VTextureSelector {
             if (texture != null && texture.getVulkanImage() != null) {
                 VTextureSelector.bindTexture(state.imageIdx, texture.getVulkanImage());
             }
-            else {
+            else if (boundTextures[state.imageIdx] == null) {
                 VTextureSelector.bindTexture(state.imageIdx, whiteTexture);
             }
         }
@@ -99,3 +99,4 @@ public abstract class VTextureSelector {
 
     public static VulkanImage getWhiteTexture() { return whiteTexture; }
 }
+

@@ -3,7 +3,6 @@ package net.vulkanmod.mixin.chunk;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.network.protocol.game.ClientboundForgetLevelChunkPacket;
 import net.minecraft.network.protocol.game.ClientboundLightUpdatePacketData;
-import net.minecraft.world.level.ChunkPos;
 import net.vulkanmod.render.chunk.ChunkStatusMap;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -20,7 +19,7 @@ public class ClientPacketListenerM {
 
     @Inject(method = "handleForgetLevelChunk", at = @At("RETURN"))
     private void resetChunkStatus(ClientboundForgetLevelChunkPacket clientboundForgetLevelChunkPacket, CallbackInfo ci) {
-        ChunkPos chunkPos = clientboundForgetLevelChunkPacket.pos();
-        ChunkStatusMap.INSTANCE.resetChunkStatus(chunkPos.x, chunkPos.z, ChunkStatusMap.LIGHT_READY);
+        ChunkStatusMap.INSTANCE.resetChunkStatus(clientboundForgetLevelChunkPacket.getX(), clientboundForgetLevelChunkPacket.getZ(), ChunkStatusMap.LIGHT_READY);
     }
 }
+

@@ -21,3 +21,4 @@ public interface LightPipeline {
      */
     void calculate(QuadView quad, BlockPos pos, QuadLightData out, Direction cullFace, Direction lightFace, boolean shade);
 }
+

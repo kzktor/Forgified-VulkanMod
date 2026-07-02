@@ -1,12 +1,11 @@
 package net.vulkanmod;
 
 import net.minecraft.network.chat.Component;
-import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
-import net.neoforged.fml.loading.FMLPaths;
-import net.neoforged.fml.ModContainer;
-import net.neoforged.bus.api.IEventBus;
-import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
+import net.minecraftforge.client.ConfigScreenHandler;
+import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
+import net.minecraftforge.fml.ModContainer;
+import net.minecraftforge.eventbus.api.IEventBus;
 import net.vulkanmod.config.Config;
 import net.vulkanmod.config.Platform;
 import net.vulkanmod.config.gui.VOptionScreen;
@@ -41,9 +40,9 @@ public class Initializer {
 	public Initializer(IEventBus modEventBus, ModContainer modContainer) {
 		VERSION = modContainer.getModInfo().getVersion().toString();
 		modEventBus.addListener(this::onInitializeClient);
-		modContainer.registerExtensionPoint(IConfigScreenFactory.class,
-				(java.util.function.Supplier<IConfigScreenFactory>) () ->
-						(container, parent) -> new VOptionScreen(Component.literal("VulkanMod Settings"), parent));
+		modContainer.registerExtensionPoint(ConfigScreenHandler.ConfigScreenFactory.class,
+				() -> new ConfigScreenHandler.ConfigScreenFactory(
+						(minecraft, parent) -> new VOptionScreen(Component.literal("VulkanMod Settings"), parent)));
 	}
 
 	private void onInitializeClient(FMLClientSetupEvent event) {
@@ -70,3 +69,4 @@ public class Initializer {
 		return VERSION;
 	}
 }
+

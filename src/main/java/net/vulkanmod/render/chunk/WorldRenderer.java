@@ -26,12 +26,14 @@ import net.minecraft.world.phys.Vec3;
 import net.vulkanmod.Initializer;
 import net.vulkanmod.render.PipelineManager;
 import net.vulkanmod.render.chunk.buffer.DrawBuffers;
-import net.vulkanmod.render.chunk.frustum.VFrustum;
 import net.vulkanmod.render.chunk.build.BlockRenderer;
 import net.vulkanmod.render.chunk.build.RenderRegionBuilder;
 import net.vulkanmod.render.chunk.build.TaskDispatcher;
 import net.vulkanmod.render.chunk.build.task.ChunkTask;
+import net.vulkanmod.render.chunk.frustum.VFrustum;
 import net.vulkanmod.render.chunk.graph.SectionGraph;
+import net.vulkanmod.render.profiling.BuildTimeProfiler;
+import net.vulkanmod.render.profiling.Profiler;
 import net.vulkanmod.render.vertex.TerrainRenderType;
 import net.vulkanmod.vulkan.Renderer;
 import net.vulkanmod.vulkan.VRenderSystem;
@@ -109,9 +111,10 @@ public class WorldRenderer {
 
         for (int i = 0; i < this.indirectBuffers.length; ++i) {
             this.indirectBuffers[i] = new IndirectBuffer(1000000, MemoryTypes.HOST_MEM);
-
+//            this.indirectBuffers[i] = new IndirectBuffer(1000000, MemoryTypes.GPU_MEM);
         }
 
+//        uniformBuffers = new UniformBuffers(100000, MemoryTypes.GPU_MEM);
     }
 
     public static WorldRenderer init(RenderBuffers renderBuffers) {
@@ -133,7 +136,16 @@ public class WorldRenderer {
         return INSTANCE.cameraPos;
     }
 
+    private void benchCallback() {
+        BuildTimeProfiler.runBench(this.graphNeedsUpdate || !this.taskDispatcher.isIdle());
+    }
+
     public void setupRenderer(Camera camera, Frustum frustum, boolean isCapturedFrustum, boolean spectator) {
+        Profiler profiler = Profiler.getMainProfiler();
+        profiler.push("Setup_Renderer");
+
+        benchCallback();
+
         this.cameraPos = camera.getPosition();
         if (this.minecraft.options.getEffectiveRenderDistance() != this.renderDistance) {
             this.allChanged();
@@ -147,12 +159,14 @@ public class WorldRenderer {
         int sectionY = SectionPos.posToSectionCoord(cameraY);
         int sectionZ = SectionPos.posToSectionCoord(cameraZ);
 
+        profiler.push("reposition");
         if (this.lastCameraSectionX != sectionX || this.lastCameraSectionY != sectionY || this.lastCameraSectionZ != sectionZ) {
             this.lastCameraSectionX = sectionX;
             this.lastCameraSectionY = sectionY;
             this.lastCameraSectionZ = sectionZ;
             this.sectionGrid.repositionCamera(cameraX, cameraZ);
         }
+        profiler.pop();
 
         double entityDistanceScaling = this.minecraft.options.entityDistanceScaling().get();
         Entity.setViewScale(Mth.clamp((double) this.renderDistance / 8.0D, 1.0D, 2.5D) * entityDistanceScaling);
@@ -171,6 +185,8 @@ public class WorldRenderer {
         this.graphNeedsUpdate |= cameraMoved;
 
         if (!isCapturedFrustum) {
+            //Debug
+//            this.graphNeedsUpdate = true;
 
             if (this.graphNeedsUpdate) {
                 this.graphNeedsUpdate = false;
@@ -185,25 +201,35 @@ public class WorldRenderer {
         }
 
         this.indirectBuffers[Renderer.getCurrentFrame()].reset();
+//        this.uniformBuffers.reset();
 
         this.minecraft.getProfiler().pop();
+        profiler.pop();
     }
 
     public void uploadSections() {
-
         if (this.sectionGrid == null) {
             return;
         }
 
         this.minecraft.getProfiler().push("upload");
 
+        Profiler profiler = Profiler.getMainProfiler();
+        profiler.push("Uploads");
+
         try {
+            // Do NOT force a graph rebuild when sections upload (1.21.x parity): uploaded geometry
+            // lands in the already-visible sections' draw buffers directly, while forcing
+            // graphNeedsUpdate here re-runs the full visibility traversal every frame whenever any
+            // section rebuilds (fluids, Create machines, Wither Storm destruction) — a large,
+            // constant CPU cost. Chunk loads still schedule a graph update via scheduleGraphUpdate.
             this.taskDispatcher.updateSections();
         } catch (Exception e) {
-
             Initializer.LOGGER.error("Failed to upload chunk sections; resetting renderer", e);
             allChanged();
         }
+
+        profiler.pop();
 
         this.minecraft.getProfiler().pop();
     }
@@ -215,13 +241,14 @@ public class WorldRenderer {
 
     public void allChanged() {
         if (this.level != null) {
-
+//            this.graphicsChanged();
             this.level.clearTintCaches();
 
             this.renderRegionCache.clear();
             this.taskDispatcher.createThreads();
 
             this.graphNeedsUpdate = true;
+//            this.generateClouds = true;
 
             this.renderDistance = this.minecraft.options.getEffectiveRenderDistance();
             if (this.sectionGrid != null) {
@@ -254,6 +281,7 @@ public class WorldRenderer {
         this.lastCameraSectionY = Integer.MIN_VALUE;
         this.lastCameraSectionZ = Integer.MIN_VALUE;
 
+//        this.entityRenderDispatcher.setLevel(level);
         this.level = level;
         ChunkStatusMap.createInstance(renderDistance);
         if (level != null) {
@@ -279,9 +307,8 @@ public class WorldRenderer {
         this.onAllChangedCallbacks.clear();
     }
 
-    public void renderSectionLayer(RenderType renderType, double camX, double camY, double camZ, Matrix4f modelView, Matrix4f projection) {
+    public void renderSectionLayer(RenderType renderType, PoseStack poseStack, double camX, double camY, double camZ, Matrix4f projection) {
         TerrainRenderType terrainRenderType = TerrainRenderType.get(renderType);
-        TerrainRenderState.prepareWorldTerrainState();
         renderType.setupRenderState();
 
         this.sortTranslucentSections(camX, camY, camZ);
@@ -292,7 +319,7 @@ public class WorldRenderer {
         final boolean isTranslucent = terrainRenderType == TerrainRenderType.TRANSLUCENT;
         final boolean indirectDraw = Initializer.CONFIG.indirectDraw && DeviceManager.supportsFastIndirectDraw();
 
-        VRenderSystem.applyMVP(modelView, projection);
+        VRenderSystem.applyMVP(poseStack.last().pose(), projection);
         VRenderSystem.setPrimitiveTopologyGL(GL11.GL_TRIANGLES);
 
         Renderer renderer = Renderer.getInstance();
@@ -329,9 +356,10 @@ public class WorldRenderer {
 
         if (terrainRenderType == TerrainRenderType.CUTOUT || terrainRenderType == TerrainRenderType.TRIPWIRE) {
             indirectBuffers[currentFrame].submitUploads();
-
+//            uniformBuffers.submitUploads();
         }
 
+        //Need to reset push constants in case the pipeline will still be used for rendering
         if (!indirectDraw) {
             VRenderSystem.setChunkOffset(0, 0, 0);
             renderer.pushConstants(pipeline);
@@ -348,7 +376,7 @@ public class WorldRenderer {
         double d0 = camX - this.xTransparentOld;
         double d1 = camY - this.yTransparentOld;
         double d2 = camZ - this.zTransparentOld;
-
+//        if (d0 * d0 + d1 * d1 + d2 * d2 > 1.0D) {
         if (d0 * d0 + d1 * d1 + d2 * d2 > 2.0D) {
             this.xTransparentOld = camX;
             this.yTransparentOld = camY;
@@ -371,6 +399,10 @@ public class WorldRenderer {
 
     public void renderBlockEntities(PoseStack poseStack, double camX, double camY, double camZ,
                                     Long2ObjectMap<SortedSet<BlockDestructionProgress>> destructionProgress, float gameTime) {
+        Profiler profiler = Profiler.getMainProfiler();
+        profiler.pop();
+        profiler.push("Block-entities");
+
         MultiBufferSource bufferSource = this.renderBuffers.bufferSource();
         VFrustum frustum = this.sectionGraph.getFrustum();
 
@@ -406,7 +438,7 @@ public class WorldRenderer {
                         int j1 = sortedset.last().getProgress();
                         if (j1 >= 0) {
                             PoseStack.Pose pose = poseStack.last();
-                            VertexConsumer vertexconsumer = new SheetedDecalTextureGenerator(this.renderBuffers.crumblingBufferSource().getBuffer(ModelBakery.DESTROY_TYPES.get(j1)), pose, 1.0f);
+                            VertexConsumer vertexconsumer = new SheetedDecalTextureGenerator(this.renderBuffers.crumblingBufferSource().getBuffer(ModelBakery.DESTROY_TYPES.get(j1)), pose.pose(), pose.normal(), 1.0f);
                             bufferSource1 = (renderType) -> {
                                 VertexConsumer vertexConsumer2 = bufferSource.getBuffer(renderType);
                                 return renderType.affectsCrumbling() ? VertexMultiConsumer.create(vertexconsumer, vertexConsumer2) : vertexConsumer2;
@@ -469,3 +501,4 @@ public class WorldRenderer {
     }
 
 }
+

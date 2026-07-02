@@ -15,3 +15,4 @@ public class QuadLightData {
      */
     public final int[] lm = new int[4];
 }
+

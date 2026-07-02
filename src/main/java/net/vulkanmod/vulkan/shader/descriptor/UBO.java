@@ -41,3 +41,4 @@ public class UBO extends AlignedStruct implements Descriptor {
         this.uniformBuffer = uniformBuffer;
     }
 }
+

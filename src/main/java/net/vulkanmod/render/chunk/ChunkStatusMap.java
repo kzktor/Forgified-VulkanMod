@@ -25,8 +25,6 @@ public class ChunkStatusMap {
     }
 
     public void updateDistance(int renderDistance) {
-        int diameter = renderDistance * 2 + 1;
-        this.map.ensureCapacity(diameter * diameter);
     }
 
     public void setChunkStatus(int x, int z, byte flag) {
@@ -38,7 +36,16 @@ public class ChunkStatusMap {
 
         if ((current & CHUNK_READY) == CHUNK_READY) {
             updateNeighbours(x, z);
+            // A newly ready chunk must be picked up by the visibility graph — uploads alone no
+            // longer force a graph rebuild (see WorldRenderer.uploadSections).
             scheduleGraphUpdateIfRendererExists();
+        }
+    }
+
+    private static void scheduleGraphUpdateIfRendererExists() {
+        WorldRenderer worldRenderer = WorldRenderer.getInstance();
+        if (worldRenderer != null && worldRenderer.getSectionGrid() != null) {
+            worldRenderer.scheduleGraphUpdate();
         }
     }
 
@@ -85,6 +92,7 @@ public class ChunkStatusMap {
         }
         return true;
 
+//        return flags == CHUNK_READY;
     }
 
     public boolean chunkRenderReady(int x, int z) {
@@ -96,11 +104,5 @@ public class ChunkStatusMap {
 
     }
 
-    private static void scheduleGraphUpdateIfRendererExists() {
-        WorldRenderer worldRenderer = WorldRenderer.getInstance();
-        if (worldRenderer != null && worldRenderer.getSectionGrid() != null) {
-            worldRenderer.scheduleGraphUpdate();
-        }
-    }
-
 }
+

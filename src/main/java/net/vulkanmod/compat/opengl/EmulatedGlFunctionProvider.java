@@ -21,3 +21,4 @@ public final class EmulatedGlFunctionProvider implements FunctionProvider {
         return GlFunctionRegistry.address(functionName.toString());
     }
 }
+

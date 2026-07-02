@@ -25,3 +25,4 @@ public final class GlCapabilitiesFallback {
                 capabilities.OpenGL20, capabilities.OpenGL30, capabilities.OpenGL33);
     }
 }
+

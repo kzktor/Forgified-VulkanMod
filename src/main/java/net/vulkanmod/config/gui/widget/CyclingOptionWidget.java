@@ -125,7 +125,7 @@ public class CyclingOptionWidget extends OptionWidget<CyclingOption<?>> {
 
         void renderButton(PoseStack matrices, double mouseX, double mouseY) {
             Tesselator tesselator = Tesselator.getInstance();
-            BufferBuilder bufferBuilder = tesselator.begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION);
+            BufferBuilder bufferBuilder = tesselator.getBuilder();
 
             RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
 
@@ -143,21 +143,23 @@ public class CyclingOptionWidget extends OptionWidget<CyclingOption<?>> {
             else
                 RenderSystem.setShaderColor(0.3f, 0.3f, 0.3f, 0.8f);
 
+            bufferBuilder.begin(VertexFormat.Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION);
+
             float h = f;
             float w = f - 1.0f;
             float yC = y + height * 0.5f;
             float xC = x + width * 0.5f;
             if (this.direction == Direction.LEFT) {
-                bufferBuilder.addVertex(matrix4f, xC - w, yC, 0);
-                bufferBuilder.addVertex(matrix4f, xC + w, yC + h, 0);
-                bufferBuilder.addVertex(matrix4f, xC + w, yC - h, 0);
+                bufferBuilder.vertex(matrix4f, xC - w, yC, 0).endVertex();
+                bufferBuilder.vertex(matrix4f, xC + w, yC + h, 0).endVertex();
+                bufferBuilder.vertex(matrix4f, xC + w, yC - h, 0).endVertex();
             } else {
-                bufferBuilder.addVertex(matrix4f, xC + w, yC, 0);
-                bufferBuilder.addVertex(matrix4f, xC - w, yC - h, 0);
-                bufferBuilder.addVertex(matrix4f, xC - w, yC + h, 0);
+                bufferBuilder.vertex(matrix4f, xC + w, yC, 0).endVertex();
+                bufferBuilder.vertex(matrix4f, xC - w, yC - h, 0).endVertex();
+                bufferBuilder.vertex(matrix4f, xC - w, yC + h, 0).endVertex();
             }
 
-            BufferUploader.drawWithShader(bufferBuilder.buildOrThrow());
+            tesselator.end();
 
             RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
             RenderSystem.setShader(GameRenderer::getPositionTexShader);
@@ -170,3 +172,4 @@ public class CyclingOptionWidget extends OptionWidget<CyclingOption<?>> {
     }
 
 }
+

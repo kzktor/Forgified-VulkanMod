@@ -295,3 +295,4 @@ public class SubBlockAoFace extends AoFaceData {
         ao[3] = c3ao * 0.25f;
     }
 }
+

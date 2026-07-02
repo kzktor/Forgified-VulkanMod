@@ -11,3 +11,4 @@ public interface WindowAccessor {
     @Accessor
     WindowEventHandler getEventHandler();
 }
+

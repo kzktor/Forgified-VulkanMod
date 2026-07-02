@@ -113,3 +113,4 @@ public class CubeModel {
 
     public ModelPart.Polygon[] getPolygons() { return this.polygons; }
 }
+

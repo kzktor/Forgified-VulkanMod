@@ -69,3 +69,4 @@ public final class GuiItemRenderState {
         VRenderSystem.setPolygonModeGL(GL11.GL_FILL);
     }
 }
+

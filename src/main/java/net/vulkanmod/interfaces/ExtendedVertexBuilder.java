@@ -21,3 +21,4 @@ public interface ExtendedVertexBuilder {
     // Used for particles
     default void vertex(float x, float y, float z, float u, float v, int packedColor, int light) {}
 }
+

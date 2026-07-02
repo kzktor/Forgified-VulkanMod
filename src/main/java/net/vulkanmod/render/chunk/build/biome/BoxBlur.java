@@ -62,3 +62,4 @@ public class BoxBlur {
         return 0xFF000000 | (((r / div) & 0xFF) << 16) | (((g / div) & 0xFF) << 8) | ((b / div) & 0xFF);
     }
 }
+

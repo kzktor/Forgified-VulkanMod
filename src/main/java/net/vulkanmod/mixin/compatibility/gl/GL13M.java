@@ -96,3 +96,4 @@ public class GL13M {
     public static void glSampleCoverage(@NativeType("GLfloat") float value, @NativeType("GLboolean") boolean invert) {
     }
 }
+

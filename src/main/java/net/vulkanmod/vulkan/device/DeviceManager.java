@@ -46,6 +46,16 @@ public abstract class DeviceManager {
     public static void init(VkInstance instance) {
         try {
             DeviceManager.getSuitableDevices(instance);
+
+            if (availableDevices.isEmpty()) {
+                throw new RuntimeException("No Vulkan-capable GPU was detected.");
+            }
+            if (suitableDevices.isEmpty()) {
+                throw new RuntimeException("Found " + availableDevices.size()
+                        + " GPU(s), but none support the required Vulkan extensions."
+                        + getAvailableDevicesInfo());
+            }
+
             DeviceManager.pickPhysicalDevice();
             DeviceManager.createLogicalDevice();
         } catch (Exception e) {
@@ -212,7 +222,12 @@ public abstract class DeviceManager {
 
             }
 
-            createInfo.ppEnabledExtensionNames(asPointerBuffer(Vulkan.REQUIRED_EXTENSION));
+            java.util.Set<String> deviceExtensions = new java.util.HashSet<>(Vulkan.REQUIRED_EXTENSION);
+            // MoltenVK / portability devices require VK_KHR_portability_subset to be enabled when supported.
+            if (device.isPortabilitySubset()) {
+                deviceExtensions.add(KHRPortabilitySubset.VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME);
+            }
+            createInfo.ppEnabledExtensionNames(asPointerBuffer(deviceExtensions));
 
             createInfo.ppEnabledLayerNames(Vulkan.ENABLE_VALIDATION_LAYERS ? asPointerBuffer(Vulkan.VALIDATION_LAYERS) : null);
 
@@ -252,10 +267,9 @@ public abstract class DeviceManager {
         try (MemoryStack stack = stackPush()) {
             Queue.QueueFamilyIndices indices = findQueueFamilies(device);
 
-            VkExtensionProperties.Buffer availableExtensions = getAvailableExtension(stack, device);
-            boolean extensionsSupported = availableExtensions.stream()
-                    .map(VkExtensionProperties::extensionNameString)
-                    .collect(toSet())
+            // Heap-allocated enumeration (Device.getAvailableExtensions): drivers exposing many
+            // extensions overflow the small LWJGL MemoryStack ("Out of stack space" on init).
+            boolean extensionsSupported = Device.getAvailableExtensions(device)
                     .containsAll(Vulkan.REQUIRED_EXTENSION);
 
             boolean swapChainAdequate = false;
@@ -271,16 +285,6 @@ public abstract class DeviceManager {
 
             return indices.isSuitable() && extensionsSupported && swapChainAdequate;
         }
-    }
-
-    private static VkExtensionProperties.Buffer getAvailableExtension(MemoryStack stack, VkPhysicalDevice device) {
-        IntBuffer extensionCount = stack.ints(0);
-        vkEnumerateDeviceExtensionProperties(device, (String) null, extensionCount, null);
-
-        VkExtensionProperties.Buffer availableExtensions = VkExtensionProperties.malloc(extensionCount.get(0), stack);
-        vkEnumerateDeviceExtensionProperties(device, (String) null, extensionCount, availableExtensions);
-
-        return availableExtensions;
     }
 
     public static int findDepthFormat(boolean use24BitsDepthFormat) {
@@ -403,3 +407,4 @@ public abstract class DeviceManager {
     }
 
 }
+

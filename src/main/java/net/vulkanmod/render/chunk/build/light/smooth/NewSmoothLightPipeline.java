@@ -281,3 +281,4 @@ public class NewSmoothLightPipeline implements LightPipeline {
     }
 
 }
+

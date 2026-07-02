@@ -87,3 +87,4 @@ public class SwitchOptionWidget extends OptionWidget<SwitchOption> {
     }
 
 }
+

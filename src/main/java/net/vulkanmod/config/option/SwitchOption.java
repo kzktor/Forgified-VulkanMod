@@ -18,3 +18,4 @@ public class SwitchOption extends Option<Boolean> {
     }
 
 }
+

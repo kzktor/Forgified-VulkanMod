@@ -161,7 +161,7 @@ public class VOptionList extends GuiElement {
         return true;
     }
 
-    public boolean mouseScrolled(double mouseX, double mouseY, double xScroll, double yScroll) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double yScroll) {
         this.setScrollAmount(this.getScrollAmount() - yScroll * (double) this.totalItemHeight / 2.0);
         return true;
     }
@@ -333,3 +333,4 @@ public class VOptionList extends GuiElement {
         }
     }
 }
+

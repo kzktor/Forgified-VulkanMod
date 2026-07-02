@@ -2,7 +2,7 @@ package net.vulkanmod.mixin.screen;
 
 import net.minecraft.client.Options;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.gui.screens.options.OptionsScreen;
+import net.minecraft.client.gui.screens.OptionsScreen;
 import net.minecraft.network.chat.Component;
 import net.vulkanmod.config.gui.VOptionScreen;
 import org.spongepowered.asm.mixin.Final;
@@ -15,16 +15,17 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(OptionsScreen.class)
 public class OptionsScreenM extends Screen {
 
-    @Shadow @Final private Screen lastScreen;
+    @Shadow(remap = false) @Final private Screen f_96235_;
 
-    @Shadow @Final private Options options;
+    @Shadow(remap = false) @Final private Options f_96236_;
 
     protected OptionsScreenM(Component title) {
         super(title);
     }
 
-    @Inject(method = "lambda$init$2", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "m_260753_", at = @At("HEAD"), cancellable = true, remap = false)
     private void injectVideoOptionScreen(CallbackInfoReturnable<Screen> cir) {
         cir.setReturnValue(new VOptionScreen(Component.literal("Video Setting"), this));
     }
 }
+

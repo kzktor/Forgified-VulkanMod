@@ -15,7 +15,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 //TODO move
 @Mixin(SpriteCoordinateExpander.class)
 public class SpriteCoordinateExpanderM implements ExtendedVertexBuilder {
-    @Shadow @Final private TextureAtlasSprite sprite;
+    @Shadow(remap = false) @Final private TextureAtlasSprite f_110796_;
 
     @Unique
     private ExtendedVertexBuilder extDelegate;
@@ -37,6 +37,7 @@ public class SpriteCoordinateExpanderM implements ExtendedVertexBuilder {
 
     @Override
     public void vertex(float x, float y, float z, int packedColor, float u, float v, int overlay, int light, int packedNormal) {
-        this.extDelegate.vertex(x, y, z, packedColor, this.sprite.getU(u), this.sprite.getV(v), overlay, light, packedNormal);
+        this.extDelegate.vertex(x, y, z, packedColor, this.f_110796_.getU(u), this.f_110796_.getV(v), overlay, light, packedNormal);
     }
 }
+

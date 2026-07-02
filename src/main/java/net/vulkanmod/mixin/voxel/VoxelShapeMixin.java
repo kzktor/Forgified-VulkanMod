@@ -11,14 +11,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(VoxelShape.class)
 public class VoxelShapeMixin implements VoxelShapeExtended {
-    @Shadow @Final protected DiscreteVoxelShape shape;
+    @Shadow(remap = false) @Final protected DiscreteVoxelShape f_83211_;
 
     int co;
 
     @SuppressWarnings("UnreachableCode")
     @Inject(method = "<init>", at = @At("RETURN"))
     private void initCornerOcclusion(DiscreteVoxelShape discreteVoxelShape, CallbackInfo ci) {
-        var disShape = this.shape;
+        var disShape = this.f_83211_;
 
         // TODO: lithium subclasses
         // lithium is using its own classes for simple cube shapes
@@ -53,3 +53,4 @@ public class VoxelShapeMixin implements VoxelShapeExtended {
         return this.co;
     }
 }
+

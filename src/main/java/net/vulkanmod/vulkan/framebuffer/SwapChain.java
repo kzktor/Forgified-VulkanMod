@@ -367,3 +367,4 @@ public class SwapChain extends Framebuffer {
         return this.swapChainImages.size();
     }
 }
+

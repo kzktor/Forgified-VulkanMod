@@ -1,7 +1,7 @@
 plugins {
     id 'java-library'
     id 'maven-publish'
-    id 'net.neoforged.moddev' version '2.0.141'
+    id 'net.neoforged.moddev.legacyforge' version '2.0.141'
 }
 
 version = project.mod_version
@@ -11,14 +11,11 @@ base {
     archivesName = project.archives_base_name
 }
 
-java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+java.toolchain.languageVersion = JavaLanguageVersion.of(17)
 
-neoForge {
-    version = project.neo_version
-
-    parchment {
-        mappingsVersion = project.parchment_mappings_version
-        minecraftVersion = project.parchment_minecraft_version
+legacyForge {
+    enable {
+        neoForgeVersion = project.neo_version
     }
 
     accessTransformers.from("src/main/resources/META-INF/accesstransformer.cfg")
@@ -26,7 +23,6 @@ neoForge {
     runs {
         client {
             client()
-            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
             systemProperty 'fml.earlydisplay', 'true'
             systemProperty 'org.lwjgl.util.Debug', 'false'
             systemProperty 'org.lwjgl.util.DebugAllocator', 'false'
@@ -41,7 +37,6 @@ neoForge {
         server {
             server()
             programArgument '--nogui'
-            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
         }
 
         data {
@@ -50,15 +45,20 @@ neoForge {
         }
     }
 
-    mods {
-        vulkanmod {
-            sourceSet sourceSets.main
-        }
-    }
 }
 
 project.ext.lwjglVersion = "3.3.3"
-project.ext.winNatives = "natives-windows"
+
+// Desktop natives bundled into the production jar so Vulkan/shaderc/VMA — and MoltenVK on
+// macOS — are present on every OS, not only the build host. Vanilla Minecraft does not ship
+// these LWJGL modules, so the mod must carry their natives itself.
+project.ext.bundledNatives = ["natives-windows", "natives-linux", "natives-macos", "natives-macos-arm64"]
+
+// Natives for the current build host, used for dev runs (runClient) and tests.
+def host = org.gradle.internal.os.OperatingSystem.current()
+project.ext.devNatives = host.windows ? "natives-windows"
+        : host.macOsX ? (System.getProperty("os.arch").contains("aarch64") ? "natives-macos-arm64" : "natives-macos")
+        : "natives-linux"
 
 dependencies {
     // Standard LWJGL for Vulkan
@@ -66,25 +66,29 @@ dependencies {
     implementation "org.lwjgl:lwjgl-shaderc:$lwjglVersion"
     implementation "org.lwjgl:lwjgl-vma:$lwjglVersion"
 
-    runtimeOnly "org.lwjgl:lwjgl-shaderc:$lwjglVersion:$winNatives"
-    runtimeOnly "org.lwjgl:lwjgl-vma:$lwjglVersion:$winNatives"
+    runtimeOnly "org.lwjgl:lwjgl-shaderc:$lwjglVersion:$devNatives"
+    runtimeOnly "org.lwjgl:lwjgl-vma:$lwjglVersion:$devNatives"
 
     // Add to runtime classpath for Dev Runs
     additionalRuntimeClasspath "org.lwjgl:lwjgl-vulkan:$lwjglVersion"
     additionalRuntimeClasspath "org.lwjgl:lwjgl-shaderc:$lwjglVersion"
     additionalRuntimeClasspath "org.lwjgl:lwjgl-vma:$lwjglVersion"
-    additionalRuntimeClasspath "org.lwjgl:lwjgl-shaderc:$lwjglVersion:$winNatives"
-    additionalRuntimeClasspath "org.lwjgl:lwjgl-vma:$lwjglVersion:$winNatives"
+    additionalRuntimeClasspath "org.lwjgl:lwjgl-shaderc:$lwjglVersion:$devNatives"
+    additionalRuntimeClasspath "org.lwjgl:lwjgl-vma:$lwjglVersion:$devNatives"
 
     // Bundle them for production via JarJar
     jarJar "org.lwjgl:lwjgl-vulkan:$lwjglVersion"
     jarJar "org.lwjgl:lwjgl-shaderc:$lwjglVersion"
     jarJar "org.lwjgl:lwjgl-vma:$lwjglVersion"
-    jarJar "org.lwjgl:lwjgl-shaderc:$lwjglVersion:$winNatives"
-    jarJar "org.lwjgl:lwjgl-vma:$lwjglVersion:$winNatives"
+    bundledNatives.each { n ->
+        jarJar "org.lwjgl:lwjgl-shaderc:$lwjglVersion:$n"
+        jarJar "org.lwjgl:lwjgl-vma:$lwjglVersion:$n"
+    }
+    // The MoltenVK loader ships only in the lwjgl-vulkan macOS natives.
+    jarJar "org.lwjgl:lwjgl-vulkan:$lwjglVersion:natives-macos"
+    jarJar "org.lwjgl:lwjgl-vulkan:$lwjglVersion:natives-macos-arm64"
 
-    // Flywheel backend SPI (runtime ships inside Create's jar-in-jar; compile against the same version)
-    compileOnly files("libs/flywheel-neoforge-1.21.1-1.0.6.jar")
+    annotationProcessor "org.spongepowered:mixin:0.8.5:processor"
 }
 
 // Ensure JarJar only contains what we want
@@ -99,13 +103,61 @@ configurations.jarJar {
 processResources {
     inputs.property "version", project.version
 
-    filesMatching("META-INF/neoforge.mods.toml") {
+    filesMatching("META-INF/mods.toml") {
         expand "version": project.version
     }
 }
 
 tasks.withType(JavaCompile).configureEach {
-    it.options.release = 21
+    it.options.release = 17
+    it.options.compilerArgs += [
+            "-AoutRefMapFile=${layout.buildDirectory.file("tmp/compileJava/compileJava-refmap.json").get().asFile}",
+            "-AoutMixinConfig=vulkanmod.mixins.json",
+            "-AreobfSrgFile=${layout.buildDirectory.file("moddev/artifacts/namedToIntermediate.srg").get().asFile}",
+            "-AdefaultObfuscationEnv=searge"
+    ]
+}
+
+tasks.register('generateNamedToIntermediateSrg') {
+    dependsOn tasks.named('createMinecraftArtifacts')
+
+    def input = layout.buildDirectory.file("moddev/artifacts/namedToIntermediate.tsrg")
+    def output = layout.buildDirectory.file("moddev/artifacts/namedToIntermediate.srg")
+
+    inputs.file(input)
+    outputs.file(output)
+
+    doLast {
+        def inFile = input.get().asFile
+        def outFile = output.get().asFile
+        outFile.parentFile.mkdirs()
+
+        def currentClass = null
+        outFile.withWriter('UTF-8') { writer ->
+            inFile.eachLine { line ->
+                if (!line.trim()) return
+
+                if (!line.startsWith('\t')) {
+                    def parts = line.trim().split('\\s+')
+                    if (parts.length >= 2) {
+                        currentClass = [from: parts[0], to: parts[1]]
+                        writer.writeLine("CL: ${currentClass.from} ${currentClass.to}")
+                    }
+                } else if (currentClass != null) {
+                    def parts = line.trim().split('\\s+')
+                    if (parts.length == 2) {
+                        writer.writeLine("FD: ${currentClass.from}/${parts[0]} ${currentClass.to}/${parts[1]}")
+                    } else if (parts.length >= 3) {
+                        writer.writeLine("MD: ${currentClass.from}/${parts[0]} ${parts[1]} ${currentClass.to}/${parts[2]} ${parts[1]}")
+                    }
+                }
+            }
+        }
+    }
+}
+
+tasks.named('compileJava') {
+    dependsOn tasks.named('generateNamedToIntermediateSrg')
 }
 
 
@@ -114,6 +166,16 @@ java {
 }
 
 jar {
+    dependsOn tasks.named('compileJava')
+
+    from(layout.buildDirectory.file("tmp/compileJava/compileJava-refmap.json")) {
+        rename { "vulkanmod.refmap.json" }
+    }
+
+    manifest {
+        attributes 'MixinConfigs': 'vulkanmod.mixins.json'
+    }
+
     from("LICENSE") {
         rename { "${it}_${project.base.archivesName.get()}"}
     }
@@ -169,8 +231,11 @@ tasks.named('jar') {
                 def slurper = new groovy.json.JsonSlurper()
                 def metadata = slurper.parseText(metadataFile.text)
                 metadata.jars.each { jarEntry ->
-                    if (jarEntry.path.contains("-natives-")) {
-                        jarEntry.identifier.artifact += "-natives"
+                    // Give every platform's natives a distinct identifier (e.g. lwjgl-vma-natives-linux),
+                    // otherwise JarJar collapses them by shared identifier and only one platform survives.
+                    def m = (jarEntry.path =~ /-(natives-[a-z0-9-]+)\.jar$/)
+                    if (m) {
+                        jarEntry.identifier.artifact += "-" + m[0][1]
                     }
                 }
                 metadataFile.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(metadata))

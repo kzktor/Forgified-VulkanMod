@@ -34,7 +34,7 @@ public final class CompatState {
 
     private static boolean computeExternalModsPresent() {
         try {
-            Class<?> modListClass = Class.forName("net.neoforged.fml.ModList");
+            Class<?> modListClass = Class.forName("net.minecraftforge.fml.ModList");
             Object modList = modListClass.getMethod("get").invoke(null);
             Object mods = modListClass.getMethod("getMods").invoke(modList);
             for (Object modInfo : (Iterable<?>) mods) {
@@ -50,3 +50,4 @@ public final class CompatState {
         }
     }
 }
+

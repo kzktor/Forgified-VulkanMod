@@ -6,3 +6,4 @@ public interface ModelPartCubeMixed {
 
     CubeModel getCubeModel();
 }
+

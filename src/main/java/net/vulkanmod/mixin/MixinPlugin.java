@@ -5,6 +5,7 @@ import org.objectweb.asm.tree.ClassNode;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -17,6 +18,12 @@ public class MixinPlugin implements IMixinConfigPlugin {
     private static final String TENSURA_OVERLAY_HANDLER_MIXIN = TENSURA_MIXIN_PACKAGE + "TensuraOverlayHandlerMixin";
     private static final String TENSURA_SIMPLE_BUTTON = "io.github.manasmods.tensura.client.screen.widgets.SimpleButton";
     private static final String TENSURA_OVERLAY_HANDLER = "io.github.manasmods.tensura.handler.client.OverlayHandler";
+    private static final String WITHER_STORM_MIXIN_PACKAGE = "net.vulkanmod.mixin.compatibility.witherstorm.";
+    private static final String WITHER_STORM_RENDER_BUFFERER_MIXIN = WITHER_STORM_MIXIN_PACKAGE + "WitherStormRenderBuffererM";
+    private static final String WITHER_STORM_RENDER_BUFFERER = "nonamecrackers2.witherstormmod.client.instancing.RenderBufferer";
+    private static final String FLYWHEEL_MIXIN_PACKAGE = "net.vulkanmod.mixin.compatibility.flywheel.";
+    private static final String FLYWHEEL_BACKEND_MANAGER_MIXIN = FLYWHEEL_MIXIN_PACKAGE + "FlywheelBackendManagerMixin";
+    private static final String FLYWHEEL_BACKEND_MANAGER = "dev.engine_room.flywheel.impl.BackendManagerImpl";
 
     @Override
     public void onLoad(String mixinPackage) {
@@ -46,6 +53,16 @@ public class MixinPlugin implements IMixinConfigPlugin {
             return false;
         }
 
+        if (mixinClassName.startsWith(WITHER_STORM_MIXIN_PACKAGE)) {
+            return WITHER_STORM_RENDER_BUFFERER_MIXIN.equals(mixinClassName)
+                    && WITHER_STORM_RENDER_BUFFERER.equals(targetClassName);
+        }
+
+        if (mixinClassName.startsWith(FLYWHEEL_MIXIN_PACKAGE)) {
+            return FLYWHEEL_BACKEND_MANAGER_MIXIN.equals(mixinClassName)
+                    && FLYWHEEL_BACKEND_MANAGER.equals(targetClassName);
+        }
+
         if (mixinClassName.startsWith("net.vulkanmod.mixin.profiling.")) {
             return RuntimeOptions.profilingMixinsEnabled();
         }
@@ -73,7 +90,11 @@ public class MixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public List<String> getMixins() {
-        return null;
+        // WitherStormRenderBuffererM is registered statically in vulkanmod.mixins.json and gated by
+        // shouldApplyMixin (the same pattern as the create/tensura compat mixins). Registering it here
+        // as well would double-register it; and the getResource() probe used previously is unreliable on
+        // NeoForge 1.20.1, where other mods' classes are not yet queryable at mixin-config-load time.
+        return new ArrayList<>();
     }
 
     @Override
@@ -85,3 +106,4 @@ public class MixinPlugin implements IMixinConfigPlugin {
 
     }
 }
+

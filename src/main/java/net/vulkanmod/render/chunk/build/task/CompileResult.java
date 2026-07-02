@@ -58,3 +58,4 @@ public class CompileResult {
         this.renderSection.setContainsBlockEntities(!blockEntities.isEmpty());
     }
 }
+

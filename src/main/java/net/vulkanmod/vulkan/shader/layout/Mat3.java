@@ -17,3 +17,4 @@ public class Mat3 extends Uniform {
         MemoryUtil.memCopy(src.ptr + 24, ptr + this.offset + 32, 12);
     }
 }
+

@@ -47,3 +47,4 @@ public class RangeOption extends Option<Integer> {
         this.setNewValue((int) n);
     }
 }
+

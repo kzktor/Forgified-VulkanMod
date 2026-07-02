@@ -1,6 +1,7 @@
 package net.vulkanmod.mixin.render.vertex;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableList;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormatElement;
 import it.unimi.dsi.fastutil.ints.IntList;
@@ -18,18 +19,22 @@ import java.util.List;
 @Mixin(VertexFormat.class)
 public class VertexFormatMixin implements VertexFormatMixed {
 
+    @Shadow(remap = false) @Final private ImmutableList<VertexFormatElement> f_86012_;
+
+    @Shadow(remap = false) @Final private IntList f_86013_;
+
     private int[] offsets;
 
     private ObjectArrayList<VertexFormatElement> fastList;
 
     @Inject(method = "<init>", at = @At("RETURN"))
-    private void injectList(List<VertexFormatElement> list, List<String> list2, IntList intList, int i, CallbackInfo ci) {
+    private void injectList(ImmutableMap<String, VertexFormatElement> elements, CallbackInfo ci) {
         ObjectArrayList<VertexFormatElement> fList = new ObjectArrayList<>();
-        fList.addAll(list);
+        fList.addAll(this.f_86012_);
 
         this.fastList = fList;
 
-        this.offsets = intList.toIntArray();
+        this.offsets = this.f_86013_.toIntArray();
     }
 
     public int getOffset(int i) {
@@ -45,3 +50,4 @@ public class VertexFormatMixin implements VertexFormatMixed {
     }
 
 }
+

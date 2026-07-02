@@ -38,3 +38,4 @@ public class Vec1f extends Uniform {
         MemoryUtil.memPutFloat(ptr + this.offset, f);
     }
 }
+

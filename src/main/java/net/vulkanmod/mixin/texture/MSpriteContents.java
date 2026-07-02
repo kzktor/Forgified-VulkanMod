@@ -20,3 +20,4 @@ public class MSpriteContents {
         SpriteUtil.addTransitionedLayout(VTextureSelector.getBoundTexture(0));
     }
 }
+

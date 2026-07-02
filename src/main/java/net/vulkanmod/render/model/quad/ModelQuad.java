@@ -93,3 +93,4 @@ public class ModelQuad implements QuadView {
         return vertexIndex * VERTEX_SIZE;
     }
 }
+

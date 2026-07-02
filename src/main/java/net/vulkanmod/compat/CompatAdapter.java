@@ -8,3 +8,4 @@ public interface CompatAdapter {
     void onEnable();
     void onDisable();
 }
+

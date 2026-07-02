@@ -11,3 +11,4 @@ public enum RenderPath {
     PARTICLES,
     CUSTOM_MODELS
 }
+

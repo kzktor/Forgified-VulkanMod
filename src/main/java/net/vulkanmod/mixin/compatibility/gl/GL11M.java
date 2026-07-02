@@ -675,3 +675,4 @@ public class GL11M {
     private static final int GL_STENCIL_REF = 0x0B97;
     private static final int GL_STENCIL_WRITEMASK = 0x0B98;
 }
+

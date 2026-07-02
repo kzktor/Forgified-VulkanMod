@@ -8,7 +8,6 @@ import net.vulkanmod.compat.render.RenderStateSnapshot;
 import net.vulkanmod.vulkan.VRenderSystem;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Quaternionf;
-import org.joml.Vector3f;
 import org.lwjgl.opengl.GL11;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -21,9 +20,11 @@ public class InventoryScreenM {
     @Unique
     private static final ThreadLocal<RenderStateSnapshot> vulkanMod$inventoryEntityStateSnapshot = new ThreadLocal<>();
 
+    // 1.20.1 renderEntityInInventory signature is (GuiGraphics, int x, int y, int scale, Quaternionf, Quaternionf,
+    // LivingEntity) — 1.21.x switched x/y/scale to float and added a Vector3f translate. Handler matches 1.20.1.
     @Inject(method = "renderEntityInInventory", at = @At("HEAD"))
-    private static void vulkanMod$beginInventoryEntityRenderStateBoundary(GuiGraphics guiGraphics, float x, float y, float scale,
-                                                                          Vector3f translate, Quaternionf pose,
+    private static void vulkanMod$beginInventoryEntityRenderStateBoundary(GuiGraphics guiGraphics, int x, int y, int scale,
+                                                                          Quaternionf pose,
                                                                           @Nullable Quaternionf cameraOrientation,
                                                                           LivingEntity entity, CallbackInfo ci) {
         vulkanMod$inventoryEntityStateSnapshot.set(new RenderStateSnapshot());
@@ -31,8 +32,8 @@ public class InventoryScreenM {
     }
 
     @Inject(method = "renderEntityInInventory", at = @At("RETURN"))
-    private static void vulkanMod$endInventoryEntityRenderStateBoundary(GuiGraphics guiGraphics, float x, float y, float scale,
-                                                                        Vector3f translate, Quaternionf pose,
+    private static void vulkanMod$endInventoryEntityRenderStateBoundary(GuiGraphics guiGraphics, int x, int y, int scale,
+                                                                        Quaternionf pose,
                                                                         @Nullable Quaternionf cameraOrientation,
                                                                         LivingEntity entity, CallbackInfo ci) {
         RenderStateSnapshot snapshot = vulkanMod$inventoryEntityStateSnapshot.get();
@@ -56,3 +57,4 @@ public class InventoryScreenM {
         VRenderSystem.setPolygonModeGL(GL11.GL_FILL);
     }
 }
+

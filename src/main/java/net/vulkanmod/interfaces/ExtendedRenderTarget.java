@@ -8,3 +8,4 @@ public interface ExtendedRenderTarget {
 
     RenderPass getRenderPass();
 }
+

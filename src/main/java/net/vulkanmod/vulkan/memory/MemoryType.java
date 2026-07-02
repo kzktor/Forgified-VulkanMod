@@ -33,3 +33,4 @@ public abstract class MemoryType {
         HOST_LOCAL
     }
 }
+

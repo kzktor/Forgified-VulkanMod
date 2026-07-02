@@ -21,17 +21,17 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(value = RenderTarget.class, priority = 900)
 public abstract class RenderTargetMixin implements ExtendedRenderTarget {
 
-    @Shadow public int viewWidth;
-    @Shadow public int viewHeight;
-    @Shadow public int width;
-    @Shadow public int height;
+    @Shadow(remap = false) public int f_83917_;
+    @Shadow(remap = false) public int f_83918_;
+    @Shadow(remap = false) public int f_83915_;
+    @Shadow(remap = false) public int f_83916_;
 
-    @Shadow protected int depthBufferId;
-    @Shadow protected int colorTextureId;
-    @Shadow public int frameBufferId;
+    @Shadow(remap = false) protected int f_83924_;
+    @Shadow(remap = false) protected int f_83923_;
+    @Shadow(remap = false) public int f_83920_;
 
-    @Shadow @Final private float[] clearChannels;
-    @Shadow @Final public boolean useDepth;
+    @Shadow(remap = false) @Final private float[] f_83921_;
+    @Shadow(remap = false) @Final public boolean f_83919_;
 
     boolean needClear = false;
     boolean bound = false;
@@ -44,15 +44,15 @@ public abstract class RenderTargetMixin implements ExtendedRenderTarget {
         if(!Renderer.isRecording())
             return;
 
-        GlFramebuffer glFramebuffer = GlFramebuffer.getFramebuffer(this.frameBufferId);
+        GlFramebuffer glFramebuffer = GlFramebuffer.getFramebuffer(this.f_83920_);
         if(!bound || GlFramebuffer.getBoundFramebuffer() != glFramebuffer) {
             needClear = true;
             return;
         }
 
-        GlStateManager._clearColor(this.clearChannels[0], this.clearChannels[1], this.clearChannels[2], this.clearChannels[3]);
+        GlStateManager._clearColor(this.f_83921_[0], this.f_83921_[1], this.f_83921_[2], this.f_83921_[3]);
         int i = 16384;
-        if (this.useDepth) {
+        if (this.f_83919_) {
             GlStateManager._clearDepth(1.0);
             i |= 256;
         }
@@ -67,7 +67,7 @@ public abstract class RenderTargetMixin implements ExtendedRenderTarget {
 
         applyClear();
 
-        GlTexture.bindTexture(this.colorTextureId);
+        GlTexture.bindTexture(this.f_83923_);
 
         GlTexture.transitionReadOnly();
         ci.cancel();
@@ -84,14 +84,14 @@ public abstract class RenderTargetMixin implements ExtendedRenderTarget {
     private void _bindWrite(boolean bl, CallbackInfo ci) {
         RenderSystem.assertOnRenderThreadOrInit();
 
-        GlFramebuffer.bindFramebuffer(GL30.GL_FRAMEBUFFER, this.frameBufferId);
+        GlFramebuffer.bindFramebuffer(GL30.GL_FRAMEBUFFER, this.f_83920_);
         if (bl) {
-            GlStateManager._viewport(0, 0, this.viewWidth, this.viewHeight);
+            GlStateManager._viewport(0, 0, this.f_83917_, this.f_83918_);
         }
 
         this.bound = true;
         if (needClear)
-            this.clear(false);
+            this.m_83954_(false);
         ci.cancel();
     }
 
@@ -109,15 +109,15 @@ public abstract class RenderTargetMixin implements ExtendedRenderTarget {
         ci.cancel();
     }
 
-    @Shadow public abstract void clear(boolean getError);
+    @Shadow(remap = false) public abstract void m_83954_(boolean getError);
 
-    @Shadow protected abstract void _bindWrite(boolean bl);
+    @Shadow(remap = false) protected abstract void m_83961_(boolean bl);
 
     @Inject(method = "_blitToScreen", at = @At("HEAD"), cancellable = true)
     private void _blitToScreen(int width, int height, boolean disableBlend, CallbackInfo ci) {
 
         if (!this.needClear) {
-            Framebuffer framebuffer = GlFramebuffer.getFramebuffer(this.frameBufferId).getFramebuffer();
+            Framebuffer framebuffer = GlFramebuffer.getFramebuffer(this.f_83920_).getFramebuffer();
             VTextureSelector.bindTexture(0, framebuffer.getColorAttachment());
 
             DrawUtil.blitToScreen();
@@ -138,7 +138,7 @@ public abstract class RenderTargetMixin implements ExtendedRenderTarget {
 
     @Override
     public RenderPass getRenderPass() {
-        return GlFramebuffer.getFramebuffer(this.frameBufferId).getRenderPass();
+        return GlFramebuffer.getFramebuffer(this.f_83920_).getRenderPass();
     }
 
     @Unique
@@ -146,7 +146,7 @@ public abstract class RenderTargetMixin implements ExtendedRenderTarget {
         if (this.needClear) {
             GlFramebuffer currentFramebuffer = GlFramebuffer.getBoundFramebuffer();
 
-            this._bindWrite(false);
+            this.m_83961_(false);
 
             if (currentFramebuffer != null) {
                 GlFramebuffer.beginRendering(currentFramebuffer);
@@ -158,11 +158,12 @@ public abstract class RenderTargetMixin implements ExtendedRenderTarget {
     private void prepareColorTextureForSampling() {
         applyClear();
 
-        GlFramebuffer glFramebuffer = GlFramebuffer.getFramebuffer(this.frameBufferId);
+        GlFramebuffer glFramebuffer = GlFramebuffer.getFramebuffer(this.f_83920_);
         if (this.bound && glFramebuffer != null && GlFramebuffer.getBoundFramebuffer() == glFramebuffer) {
             return;
         }
 
-        GlTexture.transitionReadOnly(this.colorTextureId);
+        GlTexture.transitionReadOnly(this.f_83923_);
     }
 }
+

@@ -287,3 +287,4 @@ public final class GlProgram {
     private record UniformValue(float[] floats, int[] ints) {
     }
 }
+

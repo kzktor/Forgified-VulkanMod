@@ -35,3 +35,4 @@ public record AreaSetQueue(int size, int[] set, StaticQueue<ChunkArea> queue) {
     }
 
 }
+

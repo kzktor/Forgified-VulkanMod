@@ -16,7 +16,7 @@ public class CompatDetector {
     private static boolean checkModLoadedReflective(String modId) {
         try {
 
-            Class<?> modListClass = Class.forName("net.neoforged.fml.ModList");
+            Class<?> modListClass = Class.forName("net.minecraftforge.fml.ModList");
             Object modList = modListClass.getMethod("get").invoke(null);
             return (boolean) modListClass.getMethod("isLoaded", String.class).invoke(modList, modId);
         } catch (Throwable t) {
@@ -33,7 +33,7 @@ public class CompatDetector {
 
     private static String getModVersionReflective(String modId) {
         try {
-            Class<?> modListClass = Class.forName("net.neoforged.fml.ModList");
+            Class<?> modListClass = Class.forName("net.minecraftforge.fml.ModList");
             Object modList = modListClass.getMethod("get").invoke(null);
             Optional<?> modContainerOpt = (Optional<?>) modListClass.getMethod("getModContainerById", String.class).invoke(modList, modId);
             if (modContainerOpt.isPresent()) {
@@ -48,3 +48,4 @@ public class CompatDetector {
         return "UNKNOWN";
     }
 }
+

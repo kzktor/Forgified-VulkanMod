@@ -61,3 +61,4 @@ public final class CompatMods {
         return ids.toArray(String[]::new);
     }
 }
+
