@@ -3,32 +3,31 @@ package net.vulkanmod.config.gui.widget;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.network.chat.Component;
-import net.vulkanmod.config.gui.GuiRenderer;
+import net.vulkanmod.config.gui.render.GuiRenderer;
 import net.vulkanmod.config.option.SwitchOption;
 import net.vulkanmod.vulkan.util.ColorUtil;
 
 public class SwitchOptionWidget extends OptionWidget<SwitchOption> {
     private boolean focused;
 
-    public SwitchOptionWidget(SwitchOption option, int x, int y, int width, int height, Component name) {
-        super(x, y, width, height, name);
-        this.option = option;
+    public SwitchOptionWidget(SwitchOption option, Component name) {
+        super(option, name);
         updateDisplayedValue();
     }
 
     @Override
     protected void renderControls(double mouseX, double mouseY) {
         int center = controlX + controlWidth / 2;
-        float halfWidth = 12;
-        float x0 = center - halfWidth;
-        float y0 = y + 4;
-        float height = this.height - 8;
+        int halfWidth = 12;
+        int x0 = center - halfWidth;
+        int y0 = y + 4;
+        int height = this.height - 8;
         int color;
 
-        float w1 = halfWidth - 4;
-        float h1 = height - 4;
+        int w1 = halfWidth - 4;
+        int h1 = height - 4;
         if (this.option.getNewValue()) {
-            float x1 = x0 + halfWidth + 2;
+            int x1 = x0 + halfWidth + 2;
 
             color = ColorUtil.ARGB.pack(0.4f, 0.4f, 0.4f, 1.0f);
             GuiRenderer.fillBox(x0 + 2, y0 + 2, x1 - (x0 + 2) - 1, h1, color);
@@ -43,7 +42,7 @@ public class SwitchOptionWidget extends OptionWidget<SwitchOption> {
         color = ColorUtil.ARGB.pack(0.6f, 0.6f, 0.6f, 1.0f);
         GuiRenderer.renderBoxBorder(x0, y0, halfWidth * 2, height, 1,  color);
 
-        color = this.active ? 0xFFFFFF : 0xA0A0A0;
+        color = this.active ? 0xFFFFFFFF : 0xFFA0A0A0;
         Font textRenderer = Minecraft.getInstance().font;
         int margin = Math.max(
                 textRenderer.width(Component.translatable("options.on").getString()) / 3,

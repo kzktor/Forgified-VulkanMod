@@ -7,7 +7,20 @@
   "vulkanmod.options.pages.other": "Other",
 
   "vulkanmod.options.buttons.apply": "Apply",
+  "vulkanmod.options.buttons.undo": "Undo",
   "vulkanmod.options.buttons.kofi": "Support me",
+  "vulkanmod.options.buttons.update_available": "Update available!",
+
+  "vulkanmod.options.searchFieldPlaceholder": "Search Graphics Settings",
+
+  "vulkanmod.options.performanceImpact": "Performance impact: %s",
+  "vulkanmod.options.performanceImpact.low": "Low",
+  "vulkanmod.options.performanceImpact.medium": "Medium",
+  "vulkanmod.options.performanceImpact.high": "High",
+
+  "vulkanmod.options.windowMode": "Window Mode",
+  "vulkanmod.options.windowMode.windowed": "Windowed",
+  "vulkanmod.options.windowMode.windowedFullscreen": "Windowed Fullscreen",
 
   "vulkanmod.options.performancePreset": "Performance Preset",
   "vulkanmod.options.performancePreset.tooltip": "Applies a group of Minecraft and VulkanMod settings for the selected performance target.",
