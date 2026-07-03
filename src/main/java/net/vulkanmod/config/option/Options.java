@@ -13,10 +13,13 @@ import net.vulkanmod.config.gui.OptionBlock;
 
 import net.vulkanmod.config.video.VideoModeManager;
 import net.vulkanmod.config.video.VideoModeSet;
+import net.vulkanmod.config.video.WindowMode;
 import net.vulkanmod.render.chunk.build.light.LightMode;
 import net.vulkanmod.vulkan.Renderer;
 import net.vulkanmod.vulkan.device.DeviceManager;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.stream.IntStream;
 
 public abstract class Options {
@@ -28,6 +31,28 @@ public abstract class Options {
 
     private static void markPerformancePresetCustom() {
         config.performancePreset = PerformancePreset.CUSTOM.id;
+    }
+
+    public static List<OptionPage> getOptionPages() {
+        List<OptionPage> optionPages = new ArrayList<>();
+
+        optionPages.add(new OptionPage(
+                Component.translatable("vulkanmod.options.pages.video").getString(),
+                Options.getVideoOpts()));
+
+        optionPages.add(new OptionPage(
+                Component.translatable("vulkanmod.options.pages.graphics").getString(),
+                Options.getGraphicsOpts()));
+
+        optionPages.add(new OptionPage(
+                Component.translatable("vulkanmod.options.pages.optimizations").getString(),
+                Options.getOptimizationOpts()));
+
+        optionPages.add(new OptionPage(
+                Component.translatable("vulkanmod.options.pages.other").getString(),
+                Options.getOtherOpts()));
+
+        return optionPages;
     }
 
     public static OptionBlock[] getVideoOpts() {
@@ -81,23 +106,32 @@ public abstract class Options {
             RefreshRate.setNewValue(newRefreshRates[newRefreshRates.length - 1]);
         });
 
+        // Fork mapping: fullscreen=true -> exclusive; else windowedFullscreen flag -> borderless
+        var windowModeOption = new CyclingOption<>(Component.translatable("vulkanmod.options.windowMode"),
+                WindowMode.values(),
+                value -> {
+                    minecraftOptions.fullscreen().set(value == WindowMode.EXCLUSIVE_FULLSCREEN);
+                    config.windowedFullscreen = (value == WindowMode.WINDOWED_FULLSCREEN);
+                    fullscreenDirty = true;
+                },
+                () -> minecraftOptions.fullscreen().get() ? WindowMode.EXCLUSIVE_FULLSCREEN
+                        : config.windowedFullscreen ? WindowMode.WINDOWED_FULLSCREEN
+                        : WindowMode.WINDOWED)
+                .setTranslator(value -> Component.translatable(WindowMode.getComponentName(value)));
+
+        resolutionOption.setActivationFn(() -> windowModeOption.getNewValue() == WindowMode.EXCLUSIVE_FULLSCREEN);
+        RefreshRate.setActivationFn(() -> windowModeOption.getNewValue() == WindowMode.EXCLUSIVE_FULLSCREEN);
+
+        windowModeOption.setOnChange(() -> {
+            resolutionOption.updateActiveState();
+            RefreshRate.updateActiveState();
+        });
+
         return new OptionBlock[]{
                 new OptionBlock("", new Option<?>[]{
+                        windowModeOption,
                         resolutionOption,
                         RefreshRate,
-                        new SwitchOption(Component.translatable("options.fullscreen"),
-                                value -> {
-                                    minecraftOptions.fullscreen().set(value);
-
-                                    fullscreenDirty = true;
-                                },
-                                () -> minecraftOptions.fullscreen().get()),
-                        new SwitchOption(Component.translatable("vulkanmod.options.windowedFullscreen"),
-                                value -> {
-                                    config.windowedFullscreen = value;
-                                    fullscreenDirty = true;
-                                },
-                                () -> config.windowedFullscreen),
                         new RangeOption(Component.translatable("options.framerateLimit"),
                                 10, 260, 10,
                                 value -> Component.nullToEmpty(value == 260 ?
@@ -162,7 +196,8 @@ public abstract class Options {
                                     markPerformancePresetCustom();
                                     minecraftOptions.renderDistance().set(value);
                                 },
-                                () -> minecraftOptions.renderDistance().get()),
+                                () -> minecraftOptions.renderDistance().get())
+                                .setImpact(PerformanceImpact.HIGH),
                         new RangeOption(Component.translatable("options.simulationDistance"),
                                 5, 32, 1,
                                 (value) -> {
@@ -192,7 +227,8 @@ public abstract class Options {
                                     minecraftOptions.particles().set(value);
                                 },
                                 () -> minecraftOptions.particles().get())
-                                .setTranslator(particlesMode -> Component.translatable(particlesMode.getKey())),
+                                .setTranslator(particlesMode -> Component.translatable(particlesMode.getKey()))
+                                .setImpact(PerformanceImpact.MEDIUM),
                         new CyclingOption<>(Component.translatable("options.renderClouds"),
                                 CloudStatus.values(),
                                 value -> {
@@ -222,7 +258,8 @@ public abstract class Options {
                                     case LightMode.SUB_BLOCK -> "vulkanmod.options.ao.subBlock";
                                     default -> "vulkanmod.options.unknown";
                                 }))
-                                .setTooltip(Component.translatable("vulkanmod.options.ao.subBlock.tooltip")),
+                                .setTooltip(Component.translatable("vulkanmod.options.ao.subBlock.tooltip"))
+                                .setImpact(PerformanceImpact.LOW),
                         new RangeOption(Component.translatable("options.biomeBlendRadius"),
                                 0, 7, 1,
                                 value -> {
@@ -242,14 +279,16 @@ public abstract class Options {
                                     markPerformancePresetCustom();
                                     minecraftOptions.entityShadows().set(value);
                                 },
-                                () -> minecraftOptions.entityShadows().get()),
+                                () -> minecraftOptions.entityShadows().get())
+                                .setImpact(PerformanceImpact.LOW),
                         new RangeOption(Component.translatable("options.entityDistanceScaling"),
                                 50, 500, 25,
                                 value -> {
                                     markPerformancePresetCustom();
                                     minecraftOptions.entityDistanceScaling().set(value * 0.01);
                                 },
-                                () -> (int) Math.round(minecraftOptions.entityDistanceScaling().get() * 100.0)),
+                                () -> (int) Math.round(minecraftOptions.entityDistanceScaling().get() * 100.0))
+                                .setImpact(PerformanceImpact.HIGH),
                         new CyclingOption<>(Component.translatable("options.mipmapLevels"),
                                 new Integer[]{0, 1, 2, 3, 4},
                                 value -> {
@@ -260,6 +299,7 @@ public abstract class Options {
                                 },
                                 () -> minecraftOptions.mipmapLevels().get())
                                 .setTranslator(value -> Component.nullToEmpty(value.toString()))
+                                .setImpact(PerformanceImpact.LOW)
                 })
         };
     }
@@ -289,21 +329,24 @@ public abstract class Options {
                                     case 10 -> "options.off";
                                     default -> "vulkanmod.options.unknown";
                                 }))
-                                .setTooltip(Component.translatable("vulkanmod.options.advCulling.tooltip")),
+                                .setTooltip(Component.translatable("vulkanmod.options.advCulling.tooltip"))
+                                .setImpact(PerformanceImpact.HIGH),
                         new SwitchOption(Component.translatable("vulkanmod.options.entityCulling"),
                                 value -> {
                                     markPerformancePresetCustom();
                                     config.entityCulling = value;
                                 },
                                 () -> config.entityCulling)
-                                .setTooltip(Component.translatable("vulkanmod.options.entityCulling.tooltip")),
+                                .setTooltip(Component.translatable("vulkanmod.options.entityCulling.tooltip"))
+                                .setImpact(PerformanceImpact.HIGH),
                         new SwitchOption(Component.translatable("vulkanmod.options.blockEntityCulling"),
                                 value -> {
                                     markPerformancePresetCustom();
                                     config.blockEntityCulling = value;
                                 },
                                 () -> config.blockEntityCulling)
-                                .setTooltip(Component.translatable("vulkanmod.options.blockEntityCulling.tooltip")),
+                                .setTooltip(Component.translatable("vulkanmod.options.blockEntityCulling.tooltip"))
+                                .setImpact(PerformanceImpact.HIGH),
                         new SwitchOption(Component.translatable("vulkanmod.options.leavesCulling"),
                                 value -> {
                                     markPerformancePresetCustom();
@@ -311,7 +354,8 @@ public abstract class Options {
                                     minecraft.levelRenderer.allChanged();
                                 },
                                 () -> config.leavesCulling)
-                                .setTooltip(Component.translatable("vulkanmod.options.leavesCulling.tooltip")),
+                                .setTooltip(Component.translatable("vulkanmod.options.leavesCulling.tooltip"))
+                                .setImpact(PerformanceImpact.HIGH),
                         new SwitchOption(Component.translatable("vulkanmod.options.uniqueOpaqueLayer"),
                                 value -> {
                                     markPerformancePresetCustom();
@@ -319,14 +363,16 @@ public abstract class Options {
                                     minecraft.levelRenderer.allChanged();
                                 },
                                 () -> config.uniqueOpaqueLayer)
-                                .setTooltip(Component.translatable("vulkanmod.options.uniqueOpaqueLayer.tooltip")),
+                                .setTooltip(Component.translatable("vulkanmod.options.uniqueOpaqueLayer.tooltip"))
+                                .setImpact(PerformanceImpact.HIGH),
                         new SwitchOption(Component.translatable("vulkanmod.options.indirectDraw"),
                                 value -> {
                                     markPerformancePresetCustom();
                                     config.indirectDraw = value && DeviceManager.supportsFastIndirectDraw();
                                 },
                                 () -> config.indirectDraw && DeviceManager.supportsFastIndirectDraw())
-                                .setTooltip(Component.translatable("vulkanmod.options.indirectDraw.tooltip")),
+                                .setTooltip(Component.translatable("vulkanmod.options.indirectDraw.tooltip"))
+                                .setImpact(PerformanceImpact.HIGH),
                         new SwitchOption(Component.translatable("vulkanmod.options.adaptiveChunkUploads"),
                                 value -> {
                                     markPerformancePresetCustom();

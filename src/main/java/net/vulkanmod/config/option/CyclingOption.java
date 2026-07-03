@@ -20,10 +20,13 @@ public class CyclingOption<E> extends Option<E> {
     }
 
     @Override
-    public OptionWidget<?> createOptionWidget(int x, int y, int width, int height) {
-        return new CyclingOptionWidget(this, x, y, width, height, this.name);
+    protected OptionWidget<?> createWidget() {
+        var widget = new CyclingOptionWidget(this, this.name);
+        this.widget = widget;
+        return widget;
     }
 
+    @SuppressWarnings("unused")
     public void updateOption(E[] values, Consumer<E> setter, Supplier<E> getter) {
         this.onApply = setter;
         this.valueSupplier = getter;
@@ -32,7 +35,9 @@ public class CyclingOption<E> extends Option<E> {
         this.index = ArrayUtils.indexOf(this.values, this.getNewValue());
     }
 
-    public int index() { return this.index; }
+    public int index() {
+        return this.index;
+    }
 
     public void setValues(E[] values) {
         this.values = values;
@@ -76,4 +81,3 @@ public class CyclingOption<E> extends Option<E> {
         return values;
     }
 }
-

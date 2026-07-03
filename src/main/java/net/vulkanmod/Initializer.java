@@ -8,6 +8,7 @@ import net.minecraftforge.fml.ModContainer;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.vulkanmod.config.Config;
 import net.vulkanmod.config.Platform;
+import net.vulkanmod.config.UpdateChecker;
 import net.vulkanmod.config.gui.VOptionScreen;
 import net.vulkanmod.config.video.VideoModeManager;
 import net.vulkanmod.compat.CompatBootstrap;
@@ -47,6 +48,7 @@ public class Initializer {
 
 	private void onInitializeClient(FMLClientSetupEvent event) {
 		LOGGER.info("== VulkanMod ==");
+		UpdateChecker.checkForUpdates();
 		CompatBootstrap.init();
 		if (RuntimeOptions.diagnosticsEnabled()) {
 			CompatReport.logReport();
