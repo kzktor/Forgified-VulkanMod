@@ -6,7 +6,9 @@ import net.minecraft.client.sounds.SoundManager;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundEvents;
 import net.vulkanmod.config.gui.GuiElement;
-import net.vulkanmod.config.gui.GuiRenderer;
+import net.vulkanmod.config.gui.util.VGuiConstants;
+import net.vulkanmod.config.gui.render.GuiRenderer;
+import net.vulkanmod.config.option.PerformanceImpact;
 import net.vulkanmod.vulkan.util.ColorUtil;
 
 public abstract class VAbstractWidget extends GuiElement {
@@ -15,6 +17,20 @@ public abstract class VAbstractWidget extends GuiElement {
     public boolean focused;
 
     protected Component message;
+    protected boolean centeredText = true;
+    protected int margin = 4;
+
+    public void setDimensions(int x, int y, int width, int height) {
+        this.x = x;
+        this.y = y;
+        this.width = width;
+        this.height = height;
+    }
+
+    public void setTextLayout(boolean centered, int margin) {
+        this.centeredText = centered;
+        this.margin = margin;
+    }
 
     public void render(double mX, double mY) {
         this.updateState(mX, mY);
@@ -33,17 +49,22 @@ public abstract class VAbstractWidget extends GuiElement {
     protected void onDrag(double mX, double mY, double f, double g) {
     }
 
+    public void setActive(boolean active) {
+        this.active = active;
+    }
+
     protected void renderHovering(int xPadding, int yPadding) {
+        if (this.isFocused() || !this.isActive() || !this.visible || this.focused)
+            return;
+
         float hoverMultiplier = this.getHoverMultiplier(200);
+        int borderColor = ColorUtil.ARGB.multiplyAlpha(VGuiConstants.COLOR_RED, hoverMultiplier);
+        int backgroundColor = ColorUtil.ARGB.multiplyAlpha(VGuiConstants.COLOR_RED, 0.3f * hoverMultiplier);
 
         if (hoverMultiplier > 0.0f) {
-//            int color = ColorUtil.ARGB.pack(0.5f, 0.5f, 0.5f, hoverMultiplier * 0.2f);
-            int color = ColorUtil.ARGB.pack(0.3f, 0.0f, 0.0f, hoverMultiplier * 0.2f);
-//            int color = ColorUtil.ARGB.multiplyAlpha(VOptionScreen.RED, hoverMultiplier);
-            GuiRenderer.fill(this.x - xPadding, this.y - yPadding, this.x + this.width + xPadding, this.y + this.height + yPadding, color);
-
-//            color = ColorUtil.ARGB.pack(1.0f, 1.0f, 1.0f, hoverMultiplier * 0.8f);
-            color = ColorUtil.ARGB.pack(0.3f, 0.0f, 0.0f, hoverMultiplier * 0.8f);
+            GuiRenderer.fill(this.x - xPadding, this.y - yPadding,
+                    this.x + this.width + xPadding, this.y + this.height + yPadding,
+                    backgroundColor);
 
             int x0 = this.x - xPadding;
             int x1 = this.x + this.width + xPadding;
@@ -51,18 +72,18 @@ public abstract class VAbstractWidget extends GuiElement {
             int y1 = this.y + height + yPadding;
             int border = 1;
 
-            GuiRenderer.renderBorder(x0, y0, x1, y1, border, color);
+            GuiRenderer.renderBorder(x0, y0, x1, y1, border, borderColor);
         }
     }
 
     @Override
-    public boolean mouseClicked(double mX, double mY, int button) {
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (this.active && this.visible) {
             if (this.isValidClickButton(button)) {
-                boolean bl = this.clicked(mX, mY);
-                if (bl) {
+                boolean clicked = this.clicked(mouseX, mouseY);
+                if (clicked) {
                     this.playDownSound(Minecraft.getInstance().getSoundManager());
-                    this.onClick(mX, mY);
+                    this.onClick(mouseX, mouseY);
                     return true;
                 }
             }
@@ -81,9 +102,9 @@ public abstract class VAbstractWidget extends GuiElement {
     }
 
     @Override
-    public boolean mouseReleased(double mX, double mY, int button) {
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
         if (this.isValidClickButton(button)) {
-            this.onRelease(mX, mY);
+            this.onRelease(mouseX, mouseY);
             return true;
         } else {
             return false;
@@ -95,13 +116,19 @@ public abstract class VAbstractWidget extends GuiElement {
     }
 
     @Override
-    public boolean mouseDragged(double mX, double mY, int button, double f, double g) {
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double d, double e) {
         if (this.isValidClickButton(button)) {
-            this.onDrag(mX, mY, f, g);
+            this.onDrag(mouseX, mouseY, d, e);
             return true;
         } else {
             return false;
         }
+    }
+
+    @Override
+    public void updateState(double mX, double mY) {
+        super.updateState(mX, mY);
+
     }
 
     public void playDownSound(SoundManager soundManager) {
@@ -109,6 +136,10 @@ public abstract class VAbstractWidget extends GuiElement {
     }
 
     public Component getTooltip() {
+        return null;
+    }
+
+    public PerformanceImpact getImpact() {
         return null;
     }
 }
