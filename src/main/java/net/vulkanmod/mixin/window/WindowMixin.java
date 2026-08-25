@@ -120,7 +120,7 @@ public abstract class WindowMixin {
         net.vulkanmod.Initializer.LOGGER.info("VulkanMod: WindowMixin initialization finished.");
 
         if (GLFW.glfwGetWindowAttrib(this.f_85349_, GLFW_CLIENT_API) != GLFW_NO_API) {
-            net.vulkanmod.Initializer.LOGGER.warn("VulkanMod: Reusing NeoForge early-display window with an existing OpenGL context.");
+            net.vulkanmod.Initializer.LOGGER.warn("VulkanMod: Reusing Forge early-display window with an existing OpenGL context.");
         }
 
         VRenderSystem.setWindow(this.f_85349_);
@@ -248,4 +248,3 @@ public abstract class WindowMixin {
     }
 
 }
-

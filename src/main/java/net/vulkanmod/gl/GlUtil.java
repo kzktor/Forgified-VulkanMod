@@ -4,6 +4,7 @@ import net.vulkanmod.vulkan.Vulkan;
 import net.vulkanmod.vulkan.shader.SPIRVUtils;
 import org.apache.commons.lang3.Validate;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL12;
 import org.lwjgl.opengl.GL14;
 import org.lwjgl.opengl.GL21;
 import org.lwjgl.opengl.GL30;
@@ -41,25 +42,65 @@ public abstract class GlUtil {
         return out;
     }
 
+    /** Byte offsets of R, G, B and A within each 4-byte pixel, in memory order. */
+    private static final int[] BGRA_OFFSETS = { 2, 1, 0, 3 };
+    private static final int[] ABGR_OFFSETS = { 3, 2, 1, 0 };
+    private static final int[] ARGB_OFFSETS = { 1, 2, 3, 0 };
+
     public static ByteBuffer BGRAtoRGBA_buffer(ByteBuffer in) {
+        return swizzleToRGBA_buffer(in, BGRA_OFFSETS);
+    }
+
+    /**
+     * Resolves where R, G, B and A actually sit in memory for a format/type pair, or null when the layout
+     * already matches R8G8B8A8. Packed 8_8_8_8 puts the first component in the high bits, so on a
+     * little-endian host its bytes come out in reverse format order, while UNSIGNED_BYTE and the _REV
+     * packing both keep format order.
+     */
+    public static int[] rgbaByteOffsets(int format, int type) {
+        boolean reversed = type == GL12.GL_UNSIGNED_INT_8_8_8_8;
+
+        return switch (format) {
+            case GL11.GL_RGBA -> reversed ? ABGR_OFFSETS : null;
+            case GL12.GL_BGRA -> reversed ? ARGB_OFFSETS : BGRA_OFFSETS;
+            default -> null;
+        };
+    }
+
+    public static ByteBuffer swizzleToRGBA_buffer(ByteBuffer in, int[] offsets) {
         Validate.isTrue(in.remaining() % 4 == 0, "Unexpected buffer stride");
 
         int outSize = in.remaining();
         ByteBuffer out = MemoryUtil.memAlloc(outSize);
 
-        long ptr = MemoryUtil.memAddress0(out);
+        long srcPtr = MemoryUtil.memAddress(in);
+        long dstPtr = MemoryUtil.memAddress0(out);
 
-        long srcPtr = MemoryUtil.memAddress0(in);
+        int rOff = offsets[0], gOff = offsets[1], bOff = offsets[2], aOff = offsets[3];
 
-        for (int i = 0; i < outSize ; i += 4) {
-            int color = MemoryUtil.memGetInt(srcPtr + i);
+        for (int i = 0; i < outSize; i += 4) {
+            int color = (MemoryUtil.memGetByte(srcPtr + i + rOff) & 0xFF)
+                    | (MemoryUtil.memGetByte(srcPtr + i + gOff) & 0xFF) << 8
+                    | (MemoryUtil.memGetByte(srcPtr + i + bOff) & 0xFF) << 16
+                    | (MemoryUtil.memGetByte(srcPtr + i + aOff) & 0xFF) << 24;
 
-            color = (color << 24) & 0xFF000000 | (color >> 8) & 0xFFFFFF;
-
-            MemoryUtil.memPutInt(ptr + i, color);
+            MemoryUtil.memPutInt(dstPtr + i, color);
         }
 
         return out;
+    }
+
+    /** Reorders freshly downloaded R8G8B8A8 pixels in place into the layout the caller asked for. */
+    public static void swizzleFromRGBA(long ptr, int pixelCount, int[] offsets) {
+        for (int i = 0; i < pixelCount; i++) {
+            long p = ptr + (long) i * 4L;
+            int color = MemoryUtil.memGetInt(p);
+
+            MemoryUtil.memPutByte(p + offsets[0], (byte) color);
+            MemoryUtil.memPutByte(p + offsets[1], (byte) (color >> 8));
+            MemoryUtil.memPutByte(p + offsets[2], (byte) (color >> 16));
+            MemoryUtil.memPutByte(p + offsets[3], (byte) (color >>> 24));
+        }
     }
 
     public static int vulkanFormat(int glFormat, int type) {

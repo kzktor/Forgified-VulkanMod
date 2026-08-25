@@ -16,6 +16,8 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.Vec3;
+import net.vulkanmod.compat.dynamiclights.DynamicLightsBridge;
+import net.vulkanmod.compat.litematica.LitematicaBridge;
 import net.vulkanmod.render.chunk.WorldRenderer;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
@@ -94,6 +96,9 @@ public abstract class LevelRendererMixin {
     @Inject(method = "m_194338_", at = @At("HEAD"), cancellable = true, remap = false)
     private void setupRender(Camera camera, Frustum frustum, boolean isCapturedFrustum, boolean spectator, CallbackInfo ci) {
         this.worldRenderer.setupRenderer(camera, frustum, isCapturedFrustum, spectator);
+        // Litematica culls and rebuilds its schematic chunks from a TAIL inject here, which the
+        // cancel below skips. Drive it at the same point in the frame instead.
+        LitematicaBridge.afterSetupRender(frustum);
         ci.cancel();
     }
 
@@ -113,6 +118,12 @@ public abstract class LevelRendererMixin {
     @Inject(method = "m_172993_", at = @At("HEAD"), cancellable = true, remap = false)
     private void renderSectionLayer(RenderType renderType, PoseStack poseStack, double camX, double camY, double camZ, Matrix4f projectionMatrix, CallbackInfo ci) {
         this.worldRenderer.renderSectionLayer(renderType, poseStack, camX, camY, camZ, projectionMatrix);
+        // Forge dispatches RenderLevelStageEvent at the end of the vanilla renderSectionLayer body,
+        // which this HEAD+cancel skips. Drive the dynamic-lights update here so moving light sources
+        // keep scheduling chunk rebuilds.
+        DynamicLightsBridge.updateAllDynamicLights(this);
+        // Litematica draws its schematic layer by layer from a TAIL inject here, likewise skipped.
+        LitematicaBridge.afterRenderChunkLayer(renderType, poseStack, projectionMatrix);
         ci.cancel();
     }
 
@@ -134,6 +145,8 @@ public abstract class LevelRendererMixin {
         }
 
         this.worldRenderer.allChanged();
+        // Litematica reloads its schematic renderers from a RETURN inject here, likewise skipped.
+        LitematicaBridge.afterAllChanged(this.f_109465_);
         ci.cancel();
     }
 
@@ -160,17 +173,6 @@ public abstract class LevelRendererMixin {
     @Inject(method = "m_109821_", at = @At("HEAD"), cancellable = true, remap = false)
     private void countRenderedSections(CallbackInfoReturnable<Integer> cir) {
         cir.setReturnValue(this.worldRenderer.getVisibleSectionsCount());
-    }
-
-    // renderEntity
-    @Inject(method = "m_109517_", at = @At("HEAD"), cancellable = true, remap = false)
-    private void renderEntity(Entity entity, double d, double e, double f, float g, PoseStack poseStack, MultiBufferSource multiBufferSource, CallbackInfo ci) {
-        double h = Mth.lerp(g, entity.xOld, entity.getX());
-        double i = Mth.lerp(g, entity.yOld, entity.getY());
-        double j = Mth.lerp(g, entity.zOld, entity.getZ());
-        float k = Mth.lerp(g, entity.yRotO, entity.getYRot());
-        this.f_109463_.render(entity, h - d, i - e, j - f, k, g, poseStack, multiBufferSource, this.f_109463_.getPackedLightCoords(entity, g));
-        ci.cancel();
     }
 
     @Redirect(method = "m_173012_", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/GameRenderer;m_172790_()F", remap = false), remap = false)
@@ -233,4 +235,3 @@ public abstract class LevelRendererMixin {
 //    }
 
 }
-

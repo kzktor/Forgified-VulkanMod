@@ -13,18 +13,39 @@ description='''
 Bring Vulkan to Minecraft!
 '''
 
+# VulkanMod registers its own Fabric Rendering API renderer, so Indigo's fallback
+# renderer must stay disabled. Only one renderer may claim the global slot.
+[modproperties.vulkanmod]
+    "fabric-renderer-api-v1:contains_renderer"=true
+
 [[mixins]]
 config="vulkanmod.mixins.json"
 
 [[dependencies.vulkanmod]]
     modId="forge"
     mandatory=true
-    versionRange="[47.1.106,)"
+    versionRange="[47.4.10,)"
     ordering="NONE"
     side="BOTH"
 [[dependencies.vulkanmod]]
     modId="minecraft"
     mandatory=true
     versionRange="[1.20.1,1.20.2)"
+    ordering="NONE"
+    side="BOTH"
+# Lazurite and Indium also register a Fabric Rendering API renderer. That slot is global and
+# single-occupancy, so loading either alongside VulkanMod would throw at registration time.
+# Forge 47 has no "incompatible" flag, so this is expressed as an optional dependency on a
+# version range nothing can satisfy: absent is fine, present fails the dependency check.
+[[dependencies.vulkanmod]]
+    modId="lazurite"
+    mandatory=false
+    versionRange="[9999,)"
+    ordering="NONE"
+    side="BOTH"
+[[dependencies.vulkanmod]]
+    modId="indium"
+    mandatory=false
+    versionRange="[9999,)"
     ordering="NONE"
     side="BOTH"

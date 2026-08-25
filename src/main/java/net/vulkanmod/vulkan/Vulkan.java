@@ -143,6 +143,7 @@ public class Vulkan {
 
     public static void initVulkan(long window) {
         Initializer.LOGGER.info("VulkanMod: initVulkan starting...");
+        NativeLibraryLoader.ensureLoaded();
         createInstance();
         Initializer.LOGGER.info("VulkanMod: Instance created.");
         setupDebugMessenger();
@@ -541,5 +542,4 @@ public class Vulkan {
         return DeviceManager.device;
     }
 }
-
 

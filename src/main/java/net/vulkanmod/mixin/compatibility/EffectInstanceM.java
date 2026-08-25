@@ -67,7 +67,7 @@ public class EffectInstanceM {
 
     @Inject(method = "<init>", at = @At("RETURN"))
     private void inj(ResourceManager resourceManager, String string, CallbackInfo ci) {
-        // Namespace-aware path (Forge/NeoForge allows "namespace:program" post-shader programs, e.g.
+        // Forge allows "namespace:program" post-shader programs, e.g.
         // Cracker's Wither Storm "witherstormmod:aberration_distortion"). Building the path from the raw
         // string would put the colon inside the ResourceLocation path -> ResourceLocationException.
         String[] programPathInfo = this.decompose(string, ':');
@@ -254,4 +254,3 @@ public class EffectInstanceM {
 
     }
 }
-

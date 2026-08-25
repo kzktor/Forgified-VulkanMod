@@ -3,7 +3,9 @@ package net.vulkanmod.mixin.render.block;
 import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.core.Direction;
-import net.vulkanmod.render.model.quad.QuadView;
+import net.vulkanmod.render.chunk.build.frapi.helper.NormalHelper;
+import net.vulkanmod.render.chunk.cull.QuadFacing;
+import net.vulkanmod.render.model.quad.ModelQuadView;
 import net.vulkanmod.render.model.quad.ModelQuadFlags;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -18,12 +20,14 @@ import net.vulkanmod.render.model.quad.BakedQuadDeduplicator;
 import static net.vulkanmod.render.model.quad.ModelQuad.VERTEX_SIZE;
 
 @Mixin(BakedQuad.class)
-public class BakedQuadM implements QuadView {
+public class BakedQuadM implements ModelQuadView {
 
     @Shadow(remap = false) @Final protected int[] f_111292_;
     @Shadow(remap = false) @Final protected Direction f_111294_;
     @Shadow(remap = false) @Final protected int f_111293_;
     private int flags;
+    private int normal;
+    private QuadFacing facing;
 
     @ModifyVariable(method = "<init>", at = @At("HEAD"), argsOnly = true, ordinal = 0)
     private static int[] modifyVertices(int[] vertices) {
@@ -33,6 +37,10 @@ public class BakedQuadM implements QuadView {
     @Inject(method = "<init>", at = @At("RETURN"))
     private void onInit(int[] vertices, int tintIndex, Direction direction, TextureAtlasSprite textureAtlasSprite, boolean shade, CallbackInfo ci) {
         this.flags = ModelQuadFlags.getQuadFlags(this.f_111292_, direction);
+
+        int packedNormal = NormalHelper.computePackedNormal(this);
+        this.normal = packedNormal;
+        this.facing = QuadFacing.fromNormal(packedNormal);
     }
 
     @Override
@@ -78,6 +86,21 @@ public class BakedQuadM implements QuadView {
     @Override
     public Direction getFacingDirection() {
         return this.f_111294_;
+    }
+
+    @Override
+    public Direction lightFace() {
+        return this.f_111294_;
+    }
+
+    @Override
+    public QuadFacing getQuadFacing() {
+        return this.facing;
+    }
+
+    @Override
+    public int getNormal() {
+        return this.normal;
     }
 
     @Override

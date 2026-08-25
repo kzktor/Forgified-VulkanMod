@@ -1,9 +1,9 @@
-# VulkanMod NeoForge Unofficial Fork
+# VulkanMod Forge Unofficial Fork
 
 This repository is an unofficial modified fork of [xCollateral/VulkanMod](https://github.com/xCollateral/VulkanMod).
-It has been modified for Minecraft 1.20.1 on NeoForge and is not the official VulkanMod project.
+It has been modified for Minecraft 1.20.1 on Forge and is not the official VulkanMod project.
 
-Prominent modification notice: this fork was modified on 2026-06-19 for NeoForge 1.20.1 compatibility work, release metadata cleanup, and local compatibility fixes.
+Prominent modification notice: this fork was ported to Forge 1.20.1 on 2026-08-22. It retains the original project's licensing and attribution.
 
 ## Attribution
 
@@ -17,11 +17,11 @@ Fork maintainer: Rindw.
 
 [![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/rindw)
 
-This Ko-fi link supports maintenance of this unofficial NeoForge fork.
+This Ko-fi link supports maintenance of this unofficial Forge fork.
 
 ## Features
 
-- NeoForge support for Minecraft 1.20.1.
+- Forge support for Minecraft 1.20.1.
 - Vulkan-based renderer that replaces Minecraft's default OpenGL rendering path.
 - Reduced CPU overhead through Vulkan rendering and optimized chunk submission.
 - Chunk rendering and culling optimizations for smoother world rendering.
@@ -37,10 +37,10 @@ The VulkanMod name, logos, CurseForge page, Modrinth page, Discord, and donation
 
 ## Installation
 
-1. Install [NeoForge](https://neoforged.net/) for Minecraft 1.20.1.
+1. Install [Forge](https://files.minecraftforge.net/net/minecraftforge/forge/index_1.20.1.html) for Minecraft 1.20.1.
 2. Download this fork's `VulkanMod_1.20.1-0.1.0-ALPHA+1.20.1.jar`.
 3. Put the jar into your Minecraft profile's `mods` folder.
-4. Launch the NeoForge profile.
+4. Launch the Forge profile.
 
 ## Publishing Notes
 
@@ -48,6 +48,6 @@ If you publish a binary, publish the exact corresponding source from the same tr
 
 ## About
 
-VulkanMod replaces Minecraft's default OpenGL renderer with a Vulkan-based renderer. This fork is experimental and currently targets NeoForge rather than Fabric.
+VulkanMod replaces Minecraft's default OpenGL renderer with a Vulkan-based renderer. This fork is experimental and currently targets Forge rather than Fabric.
 
 For the official upstream project, use [xCollateral/VulkanMod](https://github.com/xCollateral/VulkanMod).

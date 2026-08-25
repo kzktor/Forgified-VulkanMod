@@ -3,6 +3,7 @@ package net.vulkanmod.vulkan.texture;
 import net.vulkanmod.vulkan.device.DeviceManager;
 import net.vulkanmod.vulkan.memory.MemoryManager;
 import net.vulkanmod.vulkan.queue.CommandPool;
+import net.vulkanmod.vulkan.Renderer;
 import net.vulkanmod.vulkan.util.VUtil;
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.system.MemoryStack;
@@ -36,6 +37,13 @@ public abstract class ImageUtil {
 
     public static void downloadTexture(VulkanImage image, long ptr) {
         try (MemoryStack stack = stackPush()) {
+            // The image may have been rendered to by Renderer.currentCmdBuffer but
+            // those commands are only recorded until the pass is submitted. End and
+            // submit the active pass before using a separate transfer command buffer.
+            Renderer renderer = Renderer.getInstance();
+            if (renderer != null && Renderer.isRecording()) {
+                renderer.flushForReadback();
+            }
             int prevLayout = image.getCurrentLayout();
             CommandPool.CommandBuffer commandBuffer = DeviceManager.getGraphicsQueue().beginCommands();
             image.transitionImageLayout(stack, commandBuffer.getHandle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);

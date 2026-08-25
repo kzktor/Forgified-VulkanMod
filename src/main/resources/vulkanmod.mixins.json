@@ -23,6 +23,7 @@
     "compatibility.UniformM",
     "compatibility.witherstorm.WitherStormRenderBuffererM",
     "compatibility.flywheel.FlywheelBackendManagerMixin",
+    "compatibility.bobby.FakeChunkManagerM",
     "compatibility.gl.GL11FacadeM",
     "compatibility.gl.GL11M",
     "compatibility.gl.GL12M",
@@ -107,6 +108,7 @@
     "texture.MSimpleTexture",
     "texture.MSpriteAtlasTexture",
     "texture.MSpriteContents",
+    "texture.MSpriteContentsTicker",
     "texture.MTextureManager",
     "texture.MTextureUtil",
 
@@ -137,4 +139,3 @@
     "defaultRequire": 1
   }
 }
-

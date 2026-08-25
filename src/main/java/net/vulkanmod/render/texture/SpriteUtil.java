@@ -9,7 +9,9 @@ import java.util.Set;
 
 public abstract class SpriteUtil {
 
-    private static boolean doUpload = false;
+    // Texture uploads must be enabled during initial atlas stitching. The tick hook
+    // temporarily disables uploads only for frames that are intentionally skipped.
+    private static boolean doUpload = true;
 
     private static Set<VulkanImage> transitionedLayouts = new HashSet<>();
 
@@ -37,4 +39,3 @@ public abstract class SpriteUtil {
         }
     }
 }
-

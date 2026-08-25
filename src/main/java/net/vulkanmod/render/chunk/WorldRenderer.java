@@ -39,6 +39,7 @@ import net.vulkanmod.vulkan.Renderer;
 import net.vulkanmod.vulkan.VRenderSystem;
 import net.vulkanmod.vulkan.device.DeviceManager;
 import net.vulkanmod.vulkan.memory.Buffer;
+import net.vulkanmod.vulkan.memory.AutoIndexBuffer;
 import net.vulkanmod.vulkan.memory.IndexBuffer;
 import net.vulkanmod.vulkan.memory.IndirectBuffer;
 import net.vulkanmod.vulkan.memory.MemoryTypes;
@@ -218,12 +219,12 @@ public class WorldRenderer {
         profiler.push("Uploads");
 
         try {
-            // Do NOT force a graph rebuild when sections upload (1.21.x parity): uploaded geometry
-            // lands in the already-visible sections' draw buffers directly, while forcing
-            // graphNeedsUpdate here re-runs the full visibility traversal every frame whenever any
-            // section rebuilds (fluids, Create machines, Wither Storm destruction) — a large,
-            // constant CPU cost. Chunk loads still schedule a graph update via scheduleGraphUpdate.
-            this.taskDispatcher.updateSections();
+            // A section can be empty when the visibility graph first visits it, then become
+            // renderable when its async build completes. Rebuild the graph after uploads so
+            // newly compiled sections enter the draw queues instead of leaving large holes.
+            if (this.taskDispatcher.updateSections()) {
+                this.graphNeedsUpdate = true;
+            }
         } catch (Exception e) {
             Initializer.LOGGER.error("Failed to upload chunk sections; resetting renderer", e);
             allChanged();
@@ -328,8 +329,23 @@ public class WorldRenderer {
 
         VTextureSelector.bindShaderTextures(pipeline);
 
-        IndexBuffer indexBuffer = Renderer.getDrawer().getQuadsIndexBuffer().getIndexBuffer();
-        Renderer.getDrawer().bindIndexBuffer(Renderer.getCommandBuffer(), indexBuffer);
+        // OBJ block models such as FumoFumo can exceed the 16-bit quad index
+        // range within one section. Terrain draws use auto-generated indices,
+        // so make the 32-bit buffer large enough for the current draw queue.
+        if (!isTranslucent) {
+            AutoIndexBuffer quadIndexBuffer = Renderer.getDrawer().getQuadsIntIndexBuffer();
+            int maxVertexCount = 0;
+            for (Iterator<ChunkArea> iterator = this.sectionGraph.getChunkAreaQueue().iterator(isTranslucent); iterator.hasNext(); ) {
+                ChunkArea chunkArea = iterator.next();
+                for (RenderSection section : chunkArea.sectionQueue) {
+                    int indexCount = section.getDrawParameters(terrainRenderType).indexCount();
+                    maxVertexCount = Math.max(maxVertexCount, (indexCount * 2) / 3);
+                }
+            }
+            quadIndexBuffer.checkCapacity(maxVertexCount);
+            IndexBuffer indexBuffer = quadIndexBuffer.getIndexBuffer();
+            Renderer.getDrawer().bindIndexBuffer(Renderer.getCommandBuffer(), indexBuffer);
+        }
 
         int currentFrame = Renderer.getCurrentFrame();
         Set<TerrainRenderType> allowedRenderTypes = Initializer.CONFIG.uniqueOpaqueLayer ? TerrainRenderType.COMPACT_RENDER_TYPES : TerrainRenderType.SEMI_COMPACT_RENDER_TYPES;
@@ -501,4 +517,3 @@ public class WorldRenderer {
     }
 
 }
-

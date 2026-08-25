@@ -9,6 +9,7 @@ import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.Vec3i;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.BlockGetter;
@@ -19,6 +20,7 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.BooleanOp;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
+import net.vulkanmod.render.chunk.build.frapi.FrapiBridge;
 import net.vulkanmod.render.chunk.build.light.LightPipeline;
 import net.vulkanmod.render.chunk.build.light.data.QuadLightData;
 import net.vulkanmod.render.chunk.build.thread.BuilderResources;
@@ -29,6 +31,7 @@ import net.vulkanmod.render.vertex.TerrainRenderType;
 import net.vulkanmod.render.vertex.VertexUtil;
 import net.vulkanmod.vulkan.util.ColorUtil;
 import net.minecraftforge.client.model.data.ModelData;
+import net.minecraftforge.client.ChunkRenderTypeSet;
 import org.joml.Vector3f;
 
 import java.util.List;
@@ -75,16 +78,52 @@ public class BlockRenderer {
         long seed = blockState.getSeed(blockPos);
 
         BakedModel model = Minecraft.getInstance().getBlockRenderer().getBlockModel(blockState);
-        this.renderType = TerrainRenderType.getRenderType(TerrainRenderType.get(ItemBlockRenderTypes.getChunkRenderType(blockState)));
         this.modelData = model.getModelData(resources.region, blockPos, blockState, ModelData.EMPTY);
-        tessellateBlock(model, bufferBuilder, seed);
-    }
-
-    public void tessellateBlock(BakedModel bakedModel, TerrainBufferBuilder bufferBuilder, long seed) {
         Vec3 offset = blockState.getOffset(resources.region, blockPos);
-
         pos.add((float) offset.x, (float) offset.y, (float) offset.z);
 
+        randomSource.setSeed(seed);
+        ChunkRenderTypeSet renderTypes = model.getRenderTypes(blockState, randomSource, modelData);
+
+        // Models that opt out of the vanilla getQuads contract (Continuity's connected textures,
+        // for one) only produce their real geometry through the Fabric Rendering API. Route those
+        // through the FRAPI context instead; it emits into the same buffers.
+        if (FrapiBridge.isAvailable() && FrapiBridge.needsFrapi(model)) {
+            RenderType frapiRenderType = renderTypes.asList().isEmpty()
+                    ? ItemBlockRenderTypes.getChunkRenderType(blockState)
+                    : renderTypes.asList().get(0);
+
+            FrapiBridge.tessellate(resources, model, blockState, blockPos, pos, seed, modelData, frapiRenderType);
+            return;
+        }
+
+        // Forge composite and OBJ models can emit quads into a render type that
+        // differs from the block state's default layer. Match the reference
+        // renderer by asking the model for its declared layers first.
+        boolean rendered = false;
+        for (RenderType modelRenderType : renderTypes) {
+            TerrainRenderType terrainRenderType = TerrainRenderType.get(modelRenderType);
+            if (terrainRenderType == null) {
+                continue;
+            }
+
+            this.renderType = modelRenderType;
+            TerrainBufferBuilder modelBufferBuilder = resources.builderPack.builder(compactRenderType(terrainRenderType));
+            modelBufferBuilder.setBlockAttributes(blockState);
+            tessellateBlock(model, modelBufferBuilder, seed, modelRenderType);
+            rendered = true;
+        }
+
+        // A few older Forge model implementations return no render types.
+        // Preserve the old behavior for those models.
+        if (!rendered) {
+            RenderType defaultRenderType = ItemBlockRenderTypes.getChunkRenderType(blockState);
+            this.renderType = defaultRenderType;
+            tessellateBlock(model, bufferBuilder, seed, defaultRenderType);
+        }
+    }
+
+    public void tessellateBlock(BakedModel bakedModel, TerrainBufferBuilder bufferBuilder, long seed, RenderType modelRenderType) {
         boolean useAO = Minecraft.useAmbientOcclusion() && blockState.getLightEmission() == 0 && bakedModel.useAmbientOcclusion();
         LightPipeline lightPipeline = useAO ? resources.smoothLightPipeline : resources.flatLightPipeline;
 
@@ -93,7 +132,7 @@ public class BlockRenderer {
             Direction direction = DIRECTIONS[i];
 
             randomSource.setSeed(seed);
-            List<BakedQuad> quads = bakedModel.getQuads(blockState, direction, randomSource, modelData, renderType);
+            List<BakedQuad> quads = bakedModel.getQuads(blockState, direction, randomSource, modelData, modelRenderType);
 
             if (!quads.isEmpty()) {
                 mutableBlockPos.setWithOffset(blockPos, direction);
@@ -104,10 +143,25 @@ public class BlockRenderer {
         }
 
         randomSource.setSeed(seed);
-        List<BakedQuad> quads = bakedModel.getQuads(blockState, null, randomSource, modelData, renderType);
+        List<BakedQuad> quads = bakedModel.getQuads(blockState, null, randomSource, modelData, modelRenderType);
         if (!quads.isEmpty()) {
             renderModelFace(bufferBuilder, quads, lightPipeline, null);
         }
+    }
+
+    public static TerrainRenderType compactRenderType(TerrainRenderType renderType) {
+        if (net.vulkanmod.Initializer.CONFIG.uniqueOpaqueLayer) {
+            return switch (renderType) {
+                case SOLID, CUTOUT, CUTOUT_MIPPED -> TerrainRenderType.CUTOUT_MIPPED;
+                case TRANSLUCENT, TRIPWIRE -> TerrainRenderType.TRANSLUCENT;
+            };
+        }
+
+        return switch (renderType) {
+            case SOLID, CUTOUT_MIPPED -> TerrainRenderType.CUTOUT_MIPPED;
+            case CUTOUT -> TerrainRenderType.CUTOUT;
+            case TRANSLUCENT, TRIPWIRE -> TerrainRenderType.TRANSLUCENT;
+        };
     }
 
     private void renderModelFace(TerrainBufferBuilder bufferBuilder, List<BakedQuad> quads, LightPipeline lightPipeline, Direction cullFace) {
@@ -183,6 +237,12 @@ public class BlockRenderer {
         BlockGetter blockGetter = resources.region;
         BlockState adjBlockState = blockGetter.getBlockState(adjPos);
 
+        // FumoFumo's OBJ model is not a cube mesh. Do not apply the ordinary
+        // adjacent-face culling rules to its model output.
+        if (BuiltInRegistries.BLOCK.getKey(blockState.getBlock()).getNamespace().equals("fumofumo")) {
+            return true;
+        }
+
         if (blockState.skipRendering(adjBlockState, direction)) {
             return false;
         }
@@ -228,5 +288,3 @@ public class BlockRenderer {
         return true;
     }
 }
-
-

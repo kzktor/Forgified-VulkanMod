@@ -47,6 +47,35 @@ public class ModelQuadFlags {
             maxZ = Math.max(maxZ, z);
         }
 
+        return getQuadFlags(face, minX, minY, minZ, maxX, maxY, maxZ);
+    }
+
+    public static int getQuadFlags(QuadView quad, Direction face) {
+        float minX = 32.0F;
+        float minY = 32.0F;
+        float minZ = 32.0F;
+
+        float maxX = -32.0F;
+        float maxY = -32.0F;
+        float maxZ = -32.0F;
+
+        for (int i = 0; i < 4; ++i) {
+            float x = quad.getX(i);
+            float y = quad.getY(i);
+            float z = quad.getZ(i);
+
+            minX = Math.min(minX, x);
+            minY = Math.min(minY, y);
+            minZ = Math.min(minZ, z);
+            maxX = Math.max(maxX, x);
+            maxY = Math.max(maxY, y);
+            maxZ = Math.max(maxZ, z);
+        }
+
+        return getQuadFlags(face, minX, minY, minZ, maxX, maxY, maxZ);
+    }
+
+    private static int getQuadFlags(Direction face, float minX, float minY, float minZ, float maxX, float maxY, float maxZ) {
         boolean partial = switch (face.getAxis()) {
             case X -> minY >= 0.0001f || minZ >= 0.0001f || maxY <= 0.9999F || maxZ <= 0.9999F;
             case Y -> minX >= 0.0001f || minZ >= 0.0001f || maxX <= 0.9999F || maxZ <= 0.9999F;

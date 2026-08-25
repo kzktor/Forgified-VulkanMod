@@ -5,6 +5,7 @@ import net.minecraft.client.renderer.ItemBlockRenderTypes;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
 import net.minecraft.client.renderer.chunk.VisGraph;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
@@ -97,6 +98,23 @@ public class BuildTask extends ChunkTask {
         LiquidRenderer liquidRenderer = builderResources.liquidRenderer;
 
         BlockPos.MutableBlockPos blockPos = new BlockPos.MutableBlockPos();
+        boolean hasFumoFumoBlock = false;
+
+        // VisGraph is section-wide. A FumoFumo OBJ block reports itself as a
+        // solid render block even though it is not a cube, so mixing it with
+        // ordinary opaque cells can close visibility paths across the section.
+        // Scan first and disable VisGraph occlusion for that section entirely.
+        for (int y = 0; y < 16 && !hasFumoFumoBlock; ++y) {
+            for (int z = 0; z < 16 && !hasFumoFumoBlock; ++z) {
+                for (int x = 0; x < 16; ++x) {
+                    blockPos.set(section.xOffset() + x, section.yOffset() + y, section.zOffset() + z);
+                    if (isFumoFumoBlock(this.region.getBlockState(blockPos))) {
+                        hasFumoFumoBlock = true;
+                        break;
+                    }
+                }
+            }
+        }
 
         for (int y = 0; y < 16; ++y) {
             for (int z = 0; z < 16; ++z) {
@@ -104,7 +122,12 @@ public class BuildTask extends ChunkTask {
                     blockPos.set(section.xOffset() + x, section.yOffset() + y, section.zOffset() + z);
 
                     BlockState blockState = this.region.getBlockState(blockPos);
-                    if (blockState.isSolidRender(this.region, blockPos)) {
+                    // FumoFumo renders an OBJ model but reports solid rendering while
+                    // exposing an empty collision shape. It must not seal VisGraph.
+                    if (!hasFumoFumoBlock
+                            && !isFumoFumoBlock(blockState)
+                            && blockState.isSolidRender(this.region, blockPos)
+                            && blockState.isCollisionShapeFullBlock(this.region, blockPos)) {
                         visGraph.setOpaque(blockPos);
                     }
 
@@ -200,5 +223,8 @@ public class BuildTask extends ChunkTask {
         }
 
     }
-}
 
+    private static boolean isFumoFumoBlock(BlockState blockState) {
+        return BuiltInRegistries.BLOCK.getKey(blockState.getBlock()).getNamespace().equals("fumofumo");
+    }
+}

@@ -9,6 +9,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import net.vulkanmod.Initializer;
+import net.vulkanmod.compat.dynamiclights.DynamicLightsBridge;
 import net.vulkanmod.interfaces.VoxelShapeExtended;
 import net.vulkanmod.render.chunk.build.light.LightMode;
 import net.vulkanmod.render.chunk.util.SimpleDirection;
@@ -181,8 +182,8 @@ public abstract class LightDataAccess {
     }
 
     public static int getLightmap(int word) {
-
-        return LightTexture.pack(unpackBL(word), unpackSL(word));
+        int lightmap = LightTexture.pack(unpackBL(word), unpackSL(word));
+        return DynamicLightsBridge.applyToLightmap(word, lightmap);
     }
 
     public static int getEmissiveLightmap(int word) {

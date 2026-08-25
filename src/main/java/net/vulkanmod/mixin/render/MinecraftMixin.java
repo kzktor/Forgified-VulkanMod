@@ -101,8 +101,10 @@ public class MinecraftMixin {
     @Inject(method = "runTick", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Minecraft;tick()V"),
     locals = LocalCapture.CAPTURE_FAILHARD)
     private void redirectResourceTick(boolean bl, CallbackInfo ci, long l, Runnable runnable, int i, int j) {
-        int n = Math.min(10, i) - 1;
-        SpriteUtil.setDoUpload(j == n);
+        // Upload every animation tick. The old 1-in-10 gate left the Vulkan atlas in
+        // a stale frame because this 1.20.1 port has no separate image-upload command
+        // buffer like the newer reference implementation.
+        SpriteUtil.setDoUpload(true);
     }
 
     @Redirect(method = "runTick", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Minecraft;tick()V"))
@@ -134,7 +136,7 @@ public class MinecraftMixin {
     @Redirect(method = "setScreen", at = @At(value = "FIELD", target = "Lnet/minecraft/client/Minecraft;noRender:Z", opcode = Opcodes.PUTFIELD))
     private void keepVar(Minecraft instance, boolean value) { }
 
-    @Redirect(method = "setOverlay", at = @At(value = "INVOKE", target = "Lnet/neoforged/fml/loading/ImmediateWindowHandler;loadingOverlay(Ljava/util/function/Supplier;Ljava/util/function/Supplier;Ljava/util/function/Consumer;Z)Ljava/util/function/Supplier;", remap = false), require = 0)
+    @Redirect(method = "setOverlay", at = @At(value = "INVOKE", target = "Lnet/minecraftforge/fml/loading/ImmediateWindowHandler;loadingOverlay(Ljava/util/function/Supplier;Ljava/util/function/Supplier;Ljava/util/function/Consumer;Z)Ljava/util/function/Supplier;", remap = false), require = 0)
     private java.util.function.Supplier redirectLoadingOverlay(java.util.function.Supplier mc, java.util.function.Supplier rm, java.util.function.Consumer listener, boolean bl) {
         if (net.vulkanmod.compat.EarlyWindowCompat.isHandoffComplete()) {
             net.vulkanmod.Initializer.LOGGER.info("VulkanMod: Handoff is active, forcing vanilla LoadingOverlay instead of FML overlay.");
@@ -144,4 +146,3 @@ public class MinecraftMixin {
     }
 
 }
-

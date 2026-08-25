@@ -345,6 +345,67 @@ public class Renderer {
         }
     }
 
+    /**
+     * Finish the currently recording render pass and submit it so a separate
+     * transfer command buffer can safely read images written by this pass.
+     * The same framebuffer/render pass is resumed afterwards.
+     */
+    public void flushForReadback() {
+        if (!this.recordingCmds || this.boundRenderPass == null)
+            return;
+
+        RenderPass resumeRenderPass = this.boundRenderPass;
+        Framebuffer resumeFramebuffer = this.boundFramebuffer;
+
+        if (resumeFramebuffer == null)
+            return;
+
+        try (MemoryStack stack = stackPush()) {
+            this.endRenderPass(currentCmdBuffer);
+
+            int vkResult = vkEndCommandBuffer(currentCmdBuffer);
+            if (vkResult != VK_SUCCESS) {
+                throw new RuntimeException("Failed to end command buffer for readback: %s".formatted(VkResult.decode(vkResult)));
+            }
+
+            VkSubmitInfo submitInfo = VkSubmitInfo.calloc(stack);
+            submitInfo.sType(VK_STRUCTURE_TYPE_SUBMIT_INFO);
+            submitInfo.pCommandBuffers(stack.pointers(currentCmdBuffer));
+
+            vkResetFences(device, inFlightFences.get(currentFrame));
+            Synchronization.INSTANCE.waitFences();
+
+            vkResult = vkQueueSubmit(DeviceManager.getGraphicsQueue().queue(), submitInfo, inFlightFences.get(currentFrame));
+            if (vkResult != VK_SUCCESS) {
+                throw new RuntimeException("Failed to submit command buffer for readback: %s".formatted(VkResult.decode(vkResult)));
+            }
+
+            vkResult = vkWaitForFences(device, inFlightFences.get(currentFrame), true, VUtil.UINT64_MAX);
+            if (vkResult != VK_SUCCESS) {
+                throw new RuntimeException("Failed waiting for readback submission: %s".formatted(VkResult.decode(vkResult)));
+            }
+
+            vkResult = vkResetCommandBuffer(currentCmdBuffer, 0);
+            if (vkResult != VK_SUCCESS) {
+                throw new RuntimeException("Failed to reset command buffer for readback: %s".formatted(VkResult.decode(vkResult)));
+            }
+
+            VkCommandBufferBeginInfo beginInfo = VkCommandBufferBeginInfo.calloc(stack);
+            beginInfo.sType(VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO);
+            beginInfo.flags(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+            vkResult = vkBeginCommandBuffer(currentCmdBuffer, beginInfo);
+            if (vkResult != VK_SUCCESS) {
+                throw new RuntimeException("Failed to resume command buffer after readback: %s".formatted(VkResult.decode(vkResult)));
+            }
+
+            this.recordingCmds = true;
+            resumeFramebuffer.beginRenderPass(currentCmdBuffer, resumeRenderPass, stack);
+            this.boundFramebuffer = resumeFramebuffer;
+            this.boundRenderPass = resumeRenderPass;
+            this.invalidateRenderState();
+        }
+    }
+
     public void flushCmds() {
         if (!this.recordingCmds)
             return;
@@ -371,6 +432,7 @@ public class Renderer {
 
             vkWaitForFences(device, inFlightFences.get(currentFrame), true, VUtil.UINT64_MAX);
 
+            vkResetCommandBuffer(currentCmdBuffer, 0);
             this.beginRenderPass(stack);
         }
     }
@@ -380,16 +442,17 @@ public class Renderer {
     }
 
     public void endRenderPass(VkCommandBuffer commandBuffer) {
-        if (skipRendering || this.boundFramebuffer == null)
+        if (skipRendering || this.boundRenderPass == null)
             return;
 
         if (!DYNAMIC_RENDERING)
-            this.boundRenderPass.endRenderPass(currentCmdBuffer);
+            this.boundRenderPass.endRenderPass(commandBuffer);
         else
             KHRDynamicRendering.vkCmdEndRenderingKHR(commandBuffer);
 
         this.boundRenderPass = null;
         this.boundFramebuffer = null;
+        this.invalidateRenderState();
         clearViewportScale();
 
         GlFramebuffer.resetBoundFramebuffer();
@@ -399,7 +462,7 @@ public class Renderer {
         if (skipRendering || !recordingCmds)
             return false;
 
-        if (this.boundFramebuffer != framebuffer) {
+        if (this.boundFramebuffer != framebuffer || this.boundRenderPass != renderPass) {
             this.endRenderPass(currentCmdBuffer);
 
             try (MemoryStack stack = stackPush()) {
@@ -407,6 +470,7 @@ public class Renderer {
             }
 
             this.boundFramebuffer = framebuffer;
+            this.invalidateRenderState();
         }
         return true;
     }
@@ -435,6 +499,14 @@ public class Renderer {
 
     public void removeUsedPipeline(Pipeline pipeline) {
         usedPipelines.remove(pipeline);
+    }
+
+    /** Force all state cached across Vulkan render-pass boundaries to be rebound. */
+    public void invalidateRenderState() {
+        boundPipeline = null;
+        boundPipelineHandle = 0;
+        blendConstantsApplied = false;
+        stencilStateApplied = false;
     }
 
     private void resetDescriptors() {

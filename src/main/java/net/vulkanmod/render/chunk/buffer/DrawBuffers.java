@@ -223,6 +223,10 @@ public class DrawBuffers {
 
         public DrawParameters() {}
 
+        public int indexCount() {
+            return indexCount;
+        }
+
         public void reset(ChunkArea chunkArea, TerrainRenderType r) {
             AreaBuffer areaBuffer = chunkArea.getDrawBuffers().getAreaBuffer(r);
             if (areaBuffer != null && this.vertexOffset != -1) {
@@ -241,4 +245,3 @@ public class DrawBuffers {
     }
 
 }
-

@@ -174,7 +174,7 @@ public class GlTexture {
         }
 
         if (src != null)
-            boundTexture.uploadSubImage(xOffset, yOffset, width, height, format, src, getUnpackLayout(width));
+            boundTexture.uploadSubImage(xOffset, yOffset, width, height, format, type, src, getUnpackLayout(width));
     }
 
     private static ByteBuffer getByteBuffer(int width, int height, int formatSize, TextureUploadLayout layout, long pixels) {
@@ -207,7 +207,7 @@ public class GlTexture {
         }
 
         if (src != null)
-            boundTexture.uploadSubImage(xOffset, yOffset, width, height, format, src, getUnpackLayout(width));
+            boundTexture.uploadSubImage(xOffset, yOffset, width, height, format, type, src, getUnpackLayout(width));
     }
 
     public static void compressedTexImage2D(int target, int level, int internalFormat, int width, int height, int border) {
@@ -411,6 +411,13 @@ public class GlTexture {
         }
 
         ImageUtil.downloadTexture(image, ptr);
+
+        boolean rgba8Image = image.format == VK_FORMAT_R8G8B8A8_UNORM || image.format == VK_FORMAT_R8G8B8A8_SRGB;
+        if (rgba8Image) {
+            int[] offsets = GlUtil.rgbaByteOffsets(format, type);
+            if (offsets != null)
+                GlUtil.swizzleFromRGBA(ptr, image.width * image.height, offsets);
+        }
     }
 
     public static void setVulkanImage(int id, VulkanImage vulkanImage) {
@@ -584,14 +591,15 @@ public class GlTexture {
         vulkanImage.updateTextureSampler(maxLod, samplerFlags);
     }
 
-    private void uploadSubImage(int xOffset, int yOffset, int width, int height, int format, ByteBuffer pixels, TextureUploadLayout layout) {
+    private void uploadSubImage(int xOffset, int yOffset, int width, int height, int format, int type, ByteBuffer pixels, TextureUploadLayout layout) {
         boolean rgba8Image = vulkanImage.format == VK_FORMAT_R8G8B8A8_UNORM || vulkanImage.format == VK_FORMAT_R8G8B8A8_SRGB;
 
         ByteBuffer src;
         if (format == GL11.GL_RGB && rgba8Image) {
             src = GlUtil.RGBtoRGBA_buffer(pixels);
-        } else if (format == GL30.GL_BGRA && rgba8Image) {
-            src = GlUtil.BGRAtoRGBA_buffer(pixels);
+        } else if (rgba8Image) {
+            int[] offsets = GlUtil.rgbaByteOffsets(format, type);
+            src = offsets != null ? GlUtil.swizzleToRGBA_buffer(pixels, offsets) : pixels;
         } else {
             src = pixels;
         }

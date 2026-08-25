@@ -4,6 +4,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraftforge.client.ConfigScreenHandler;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
+import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.fml.ModContainer;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.vulkanmod.config.Config;
@@ -14,6 +15,7 @@ import net.vulkanmod.config.video.VideoModeManager;
 import net.vulkanmod.compat.CompatBootstrap;
 import net.vulkanmod.compat.CompatReport;
 import net.vulkanmod.compat.RuntimeOptions;
+import net.vulkanmod.render.chunk.build.frapi.FrapiBridge;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -38,7 +40,10 @@ public class Initializer {
 		}
 	}
 
-	public Initializer(IEventBus modEventBus, ModContainer modContainer) {
+	public Initializer() {
+		FMLJavaModLoadingContext loadingContext = FMLJavaModLoadingContext.get();
+		IEventBus modEventBus = loadingContext.getModEventBus();
+		ModContainer modContainer = loadingContext.getContainer();
 		VERSION = modContainer.getModInfo().getVersion().toString();
 		modEventBus.addListener(this::onInitializeClient);
 		modContainer.registerExtensionPoint(ConfigScreenHandler.ConfigScreenFactory.class,
@@ -50,6 +55,7 @@ public class Initializer {
 		LOGGER.info("== VulkanMod ==");
 		UpdateChecker.checkForUpdates();
 		CompatBootstrap.init();
+		FrapiBridge.init();
 		if (RuntimeOptions.diagnosticsEnabled()) {
 			CompatReport.logReport();
 		}
@@ -71,4 +77,3 @@ public class Initializer {
 		return VERSION;
 	}
 }
-

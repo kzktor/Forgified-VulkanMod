@@ -51,8 +51,8 @@ public class AutoIndexBuffer {
     }
 
     public void checkCapacity(int vertexCount) {
-        if(vertexCount > this.vertexCount) {
-            int newVertexCount = this.vertexCount * 2;
+        while (vertexCount > this.vertexCount) {
+            int newVertexCount = Math.max(this.vertexCount * 2, vertexCount);
             Initializer.LOGGER.info("Reallocating AutoIndexBuffer from {} to {}", this.vertexCount, newVertexCount);
 
             this.indexBuffer.freeBuffer();
@@ -225,4 +225,3 @@ public class AutoIndexBuffer {
         }
     }
 }
-

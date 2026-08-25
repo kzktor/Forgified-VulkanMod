@@ -36,7 +36,9 @@ public class Drawer {
     public Drawer() {
 
         this.quadsIndexBuffer = new AutoIndexBuffer(AutoIndexBuffer.QUAD_U16_MAX_VERTEX_COUNT, AutoIndexBuffer.DrawType.QUADS);
-        this.quadsIntIndexBuffer = new AutoIndexBuffer(100000, AutoIndexBuffer.DrawType.QUADS);
+        // Terrain sections can contain several large Forge OBJ models.
+        // Start with enough 32-bit indices for roughly 250,000 quads.
+        this.quadsIntIndexBuffer = new AutoIndexBuffer(1_000_000, AutoIndexBuffer.DrawType.QUADS);
         this.linesIndexBuffer = new AutoIndexBuffer(10000, AutoIndexBuffer.DrawType.LINES);
         this.debugLineStripIndexBuffer = new AutoIndexBuffer(10000, AutoIndexBuffer.DrawType.DEBUG_LINE_STRIP);
         this.triangleFanIndexBuffer = new AutoIndexBuffer(1000, AutoIndexBuffer.DrawType.TRIANGLE_FAN);
@@ -171,6 +173,10 @@ public class Drawer {
         return this.quadsIndexBuffer;
     }
 
+    public AutoIndexBuffer getQuadsIntIndexBuffer() {
+        return this.quadsIntIndexBuffer;
+    }
+
     public AutoIndexBuffer getLinesIndexBuffer() {
         return this.linesIndexBuffer;
     }
@@ -192,4 +198,3 @@ public class Drawer {
     }
 
 }
-

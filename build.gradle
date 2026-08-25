@@ -1,7 +1,10 @@
 plugins {
+    id 'eclipse'
+    id 'idea'
     id 'java-library'
     id 'maven-publish'
-    id 'net.neoforged.moddev.legacyforge' version '2.0.141'
+    id 'net.minecraftforge.gradle' version '[6.0.24,6.2)'
+    id 'org.spongepowered.mixin' version '0.7.+'
 }
 
 version = project.mod_version
@@ -13,55 +16,115 @@ base {
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(17)
 
-legacyForge {
-    enable {
-        neoForgeVersion = project.neo_version
-    }
+jarJar.enable()
 
-    accessTransformers.from("src/main/resources/META-INF/accesstransformer.cfg")
+minecraft {
+    mappings channel: 'official', version: project.minecraft_version
+    accessTransformer = file('src/main/resources/META-INF/accesstransformer.cfg')
 
     runs {
         client {
-            client()
-            systemProperty 'fml.earlydisplay', 'true'
-            systemProperty 'org.lwjgl.util.Debug', 'false'
-            systemProperty 'org.lwjgl.util.DebugAllocator', 'false'
-            systemProperty 'vulkanmod.compat.externalLod', System.getProperty('vulkanmod.compat.externalLod', 'off')
-            systemProperty 'vulkanmod.compat.externalLod.draw', System.getProperty('vulkanmod.compat.externalLod.draw', 'true')
-            systemProperty 'vulkanmod.compat.externalLod.debugDraw', System.getProperty('vulkanmod.compat.externalLod.debugDraw', 'false')
-            jvmArguments.add('-ea')
-            jvmArguments.add('-XX:+UseZGC')
-            jvmArguments.add('-XX:SoftMaxHeapSize=1536m')
+            workingDirectory project.file('run')
+            property 'fml.earlydisplay', 'true'
+            property 'org.lwjgl.util.Debug', 'false'
+            property 'org.lwjgl.util.DebugAllocator', 'false'
+            property 'vulkanmod.compat.externalLod', System.getProperty('vulkanmod.compat.externalLod', 'off')
+            property 'vulkanmod.compat.externalLod.draw', System.getProperty('vulkanmod.compat.externalLod.draw', 'true')
+            property 'vulkanmod.compat.externalLod.debugDraw', System.getProperty('vulkanmod.compat.externalLod.debugDraw', 'false')
+            jvmArg '-ea'
+            jvmArg '-XX:+UseZGC'
+            jvmArg '-XX:SoftMaxHeapSize=1536m'
+
+            mods {
+                vulkanmod {
+                    source sourceSets.main
+                }
+            }
         }
 
         server {
-            server()
-            programArgument '--nogui'
+            workingDirectory project.file('run')
+            args '--nogui'
+
+            mods {
+                vulkanmod {
+                    source sourceSets.main
+                }
+            }
         }
 
         data {
-            data()
-            programArguments.addAll '--mod', project.mod_id, '--all', '--output', file('src/generated/resources/').getAbsolutePath(), '--existing', file('src/main/resources/').getAbsolutePath()
+            workingDirectory project.file('run-data')
+            args '--mod', project.mod_id, '--all', '--output', file('src/generated/resources/').getAbsolutePath(), '--existing', file('src/main/resources/').getAbsolutePath()
+
+            mods {
+                vulkanmod {
+                    source sourceSets.main
+                }
+            }
         }
     }
-
 }
 
-project.ext.lwjglVersion = "3.3.3"
+sourceSets.main.resources {
+    srcDir 'src/generated/resources'
+}
 
-// Desktop natives bundled into the production jar so Vulkan/shaderc/VMA — and MoltenVK on
-// macOS — are present on every OS, not only the build host. Vanilla Minecraft does not ship
-// these LWJGL modules, so the mod must carry their natives itself.
-project.ext.bundledNatives = ["natives-windows", "natives-linux", "natives-macos", "natives-macos-arm64"]
+configurations {
+    nativesWindows {
+        canBeResolved = true
+        canBeConsumed = false
+        transitive = false
+    }
+    nativesLinux {
+        canBeResolved = true
+        canBeConsumed = false
+        transitive = false
+    }
+    nativesMacos {
+        canBeResolved = true
+        canBeConsumed = false
+        transitive = false
+    }
+    nativesMacosArm64 {
+        canBeResolved = true
+        canBeConsumed = false
+        transitive = false
+    }
+}
 
-// Natives for the current build host, used for dev runs (runClient) and tests.
+project.ext.lwjglVersion = '3.3.3'
+def lwjglJarJarVersion = "[$lwjglVersion,3.3.4)"
+
 def host = org.gradle.internal.os.OperatingSystem.current()
-project.ext.devNatives = host.windows ? "natives-windows"
-        : host.macOsX ? (System.getProperty("os.arch").contains("aarch64") ? "natives-macos-arm64" : "natives-macos")
-        : "natives-linux"
+project.ext.devNatives = host.windows ? 'natives-windows'
+        : host.macOsX ? (System.getProperty('os.arch').contains('aarch64') ? 'natives-macos-arm64' : 'natives-macos')
+        : 'natives-linux'
+
+repositories {
+    mavenCentral()
+    maven {
+        name = 'Sinytra'
+        url = 'https://maven.su5ed.dev/releases'
+    }
+    maven {
+        name = 'Modrinth'
+        url = 'https://api.modrinth.com/maven'
+        content {
+            includeGroup 'maven.modrinth'
+        }
+    }
+}
 
 dependencies {
-    // Standard LWJGL for Vulkan
+    minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+
+    // Forgified Fabric API supplies the Fabric Rendering API that Continuity emits
+    // connected-texture quads through. Compile-time only: it is a runtime dependency of
+    // Continuity itself, so it is always present when the FRAPI path actually matters.
+    compileOnly fg.deobf("dev.su5ed.sinytra.fabric-api:fabric-renderer-api-v1:${ffapi_renderer_api_version}")
+    compileOnly fg.deobf("dev.su5ed.sinytra.fabric-api:fabric-api-base:${ffapi_api_base_version}")
+
     implementation "org.lwjgl:lwjgl-vulkan:$lwjglVersion"
     implementation "org.lwjgl:lwjgl-shaderc:$lwjglVersion"
     implementation "org.lwjgl:lwjgl-vma:$lwjglVersion"
@@ -69,29 +132,24 @@ dependencies {
     runtimeOnly "org.lwjgl:lwjgl-shaderc:$lwjglVersion:$devNatives"
     runtimeOnly "org.lwjgl:lwjgl-vma:$lwjglVersion:$devNatives"
 
-    // Add to runtime classpath for Dev Runs
-    additionalRuntimeClasspath "org.lwjgl:lwjgl-vulkan:$lwjglVersion"
-    additionalRuntimeClasspath "org.lwjgl:lwjgl-shaderc:$lwjglVersion"
-    additionalRuntimeClasspath "org.lwjgl:lwjgl-vma:$lwjglVersion"
-    additionalRuntimeClasspath "org.lwjgl:lwjgl-shaderc:$lwjglVersion:$devNatives"
-    additionalRuntimeClasspath "org.lwjgl:lwjgl-vma:$lwjglVersion:$devNatives"
+    // ForgeGradle's Jar-in-Jar metadata requires Maven version ranges.
+    jarJar "org.lwjgl:lwjgl-vulkan:$lwjglJarJarVersion"
+    jarJar "org.lwjgl:lwjgl-shaderc:$lwjglJarJarVersion"
+    jarJar "org.lwjgl:lwjgl-vma:$lwjglJarJarVersion"
+    nativesWindows "org.lwjgl:lwjgl-shaderc:$lwjglVersion:natives-windows"
+    nativesWindows "org.lwjgl:lwjgl-vma:$lwjglVersion:natives-windows"
+    nativesLinux "org.lwjgl:lwjgl-shaderc:$lwjglVersion:natives-linux"
+    nativesLinux "org.lwjgl:lwjgl-vma:$lwjglVersion:natives-linux"
+    nativesMacos "org.lwjgl:lwjgl-shaderc:$lwjglVersion:natives-macos"
+    nativesMacos "org.lwjgl:lwjgl-vma:$lwjglVersion:natives-macos"
+    nativesMacos "org.lwjgl:lwjgl-vulkan:$lwjglVersion:natives-macos"
+    nativesMacosArm64 "org.lwjgl:lwjgl-shaderc:$lwjglVersion:natives-macos-arm64"
+    nativesMacosArm64 "org.lwjgl:lwjgl-vma:$lwjglVersion:natives-macos-arm64"
+    nativesMacosArm64 "org.lwjgl:lwjgl-vulkan:$lwjglVersion:natives-macos-arm64"
 
-    // Bundle them for production via JarJar
-    jarJar "org.lwjgl:lwjgl-vulkan:$lwjglVersion"
-    jarJar "org.lwjgl:lwjgl-shaderc:$lwjglVersion"
-    jarJar "org.lwjgl:lwjgl-vma:$lwjglVersion"
-    bundledNatives.each { n ->
-        jarJar "org.lwjgl:lwjgl-shaderc:$lwjglVersion:$n"
-        jarJar "org.lwjgl:lwjgl-vma:$lwjglVersion:$n"
-    }
-    // The MoltenVK loader ships only in the lwjgl-vulkan macOS natives.
-    jarJar "org.lwjgl:lwjgl-vulkan:$lwjglVersion:natives-macos"
-    jarJar "org.lwjgl:lwjgl-vulkan:$lwjglVersion:natives-macos-arm64"
-
-    annotationProcessor "org.spongepowered:mixin:0.8.5:processor"
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
 }
 
-// Ensure JarJar only contains what we want
 configurations.jarJar {
     exclude group: 'org.lwjgl', module: 'lwjgl'
     exclude group: 'org.lwjgl', module: 'lwjgl-glfw'
@@ -99,119 +157,103 @@ configurations.jarJar {
     exclude group: 'org.lwjgl', module: 'lwjgl-stb'
 }
 
+mixin {
+    add sourceSets.main, 'vulkanmod.refmap.json'
+    config 'vulkanmod.mixins.json'
+}
 
 processResources {
-    inputs.property "version", project.version
+    inputs.property 'version', project.version
 
-    filesMatching("META-INF/mods.toml") {
-        expand "version": project.version
+    filesMatching('META-INF/mods.toml') {
+        expand 'version': project.version
     }
 }
 
 tasks.withType(JavaCompile).configureEach {
-    it.options.release = 17
-    it.options.compilerArgs += [
-            "-AoutRefMapFile=${layout.buildDirectory.file("tmp/compileJava/compileJava-refmap.json").get().asFile}",
-            "-AoutMixinConfig=vulkanmod.mixins.json",
-            "-AreobfSrgFile=${layout.buildDirectory.file("moddev/artifacts/namedToIntermediate.srg").get().asFile}",
-            "-AdefaultObfuscationEnv=searge"
-    ]
+    options.release = 17
 }
-
-tasks.register('generateNamedToIntermediateSrg') {
-    dependsOn tasks.named('createMinecraftArtifacts')
-
-    def input = layout.buildDirectory.file("moddev/artifacts/namedToIntermediate.tsrg")
-    def output = layout.buildDirectory.file("moddev/artifacts/namedToIntermediate.srg")
-
-    inputs.file(input)
-    outputs.file(output)
-
-    doLast {
-        def inFile = input.get().asFile
-        def outFile = output.get().asFile
-        outFile.parentFile.mkdirs()
-
-        def currentClass = null
-        outFile.withWriter('UTF-8') { writer ->
-            inFile.eachLine { line ->
-                if (!line.trim()) return
-
-                if (!line.startsWith('\t')) {
-                    def parts = line.trim().split('\\s+')
-                    if (parts.length >= 2) {
-                        currentClass = [from: parts[0], to: parts[1]]
-                        writer.writeLine("CL: ${currentClass.from} ${currentClass.to}")
-                    }
-                } else if (currentClass != null) {
-                    def parts = line.trim().split('\\s+')
-                    if (parts.length == 2) {
-                        writer.writeLine("FD: ${currentClass.from}/${parts[0]} ${currentClass.to}/${parts[1]}")
-                    } else if (parts.length >= 3) {
-                        writer.writeLine("MD: ${currentClass.from}/${parts[0]} ${parts[1]} ${currentClass.to}/${parts[2]} ${parts[1]}")
-                    }
-                }
-            }
-        }
-    }
-}
-
-tasks.named('compileJava') {
-    dependsOn tasks.named('generateNamedToIntermediateSrg')
-}
-
 
 java {
     withSourcesJar()
 }
 
-jar {
-    dependsOn tasks.named('compileJava')
+tasks.named('jar', Jar).configure {
+    archiveClassifier.set('slim')
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    exclude 'module-info.class'
+    exclude 'META-INF/versions/*/module-info.class'
+    exclude 'META-INF/*.SF'
+    exclude 'META-INF/*.DSA'
+    exclude 'META-INF/*.RSA'
 
-    from(layout.buildDirectory.file("tmp/compileJava/compileJava-refmap.json")) {
-        rename { "vulkanmod.refmap.json" }
+    // Native JARs are unpacked into the mod JAR. Forge's Jar-in-Jar locator only accepts
+    // loadable Java dependencies and rejects classifier-only native archives as mod files.
+    into('assets/vulkanmod/natives/windows/x64') {
+        from { project.configurations.nativesWindows.collect { zipTree(it) } }
+    }
+    into('assets/vulkanmod/natives/linux/x64') {
+        from { project.configurations.nativesLinux.collect { zipTree(it) } }
+    }
+    into('assets/vulkanmod/natives/macos/x64') {
+        from { project.configurations.nativesMacos.collect { zipTree(it) } }
+    }
+    into('assets/vulkanmod/natives/macos/arm64') {
+        from { project.configurations.nativesMacosArm64.collect { zipTree(it) } }
     }
 
     manifest {
         attributes 'MixinConfigs': 'vulkanmod.mixins.json'
     }
-
-    from("LICENSE") {
-        rename { "${it}_${project.base.archivesName.get()}"}
+    from('LICENSE') {
+        rename { "${it}_${project.base.archivesName.get()}" }
     }
-    from("COPYING") {
-        rename { "${it}_${project.base.archivesName.get()}"}
+    from('COPYING') {
+        rename { "${it}_${project.base.archivesName.get()}" }
     }
-    from("NOTICE") {
-        rename { "${it}_${project.base.archivesName.get()}"}
-    }
-}
-
-publishing {
-    publications {
-        create("mavenJava", MavenPublication) {
-            artifactId = project.archives_base_name
-            from components.java
-        }
+    from('NOTICE') {
+        rename { "${it}_${project.base.archivesName.get()}" }
     }
 }
 
-// Post-process: strip module-info.class from embedded LWJGL JarJar jars.
-// Without this, lwjgl-vulkan ends up in its own JPMS module layer,
-// invisible to org.lwjgl.glfw in the boot layer, causing:
-//   NoClassDefFoundError: org/lwjgl/vulkan/VkInstance
-tasks.named('jar') {
+// ForgeGradle reobfuscates the Jar-in-Jar output, which is the distributable artifact.
+reobf {
+    jarJar {}
+}
+
+tasks.named('jarJar').configure {
+    archiveClassifier.set('')
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    exclude 'module-info.class'
+    exclude 'META-INF/versions/*/module-info.class'
+    exclude 'META-INF/*.SF'
+    exclude 'META-INF/*.DSA'
+    exclude 'META-INF/*.RSA'
+
+    into('assets/vulkanmod/natives/windows/x64') {
+        from { project.configurations.nativesWindows.collect { zipTree(it) } }
+    }
+    into('assets/vulkanmod/natives/linux/x64') {
+        from { project.configurations.nativesLinux.collect { zipTree(it) } }
+    }
+    into('assets/vulkanmod/natives/macos/x64') {
+        from { project.configurations.nativesMacos.collect { zipTree(it) } }
+    }
+    into('assets/vulkanmod/natives/macos/arm64') {
+        from { project.configurations.nativesMacosArm64.collect { zipTree(it) } }
+    }
+
+    finalizedBy tasks.named('reobfJarJar')
+
     doLast {
         def jarFile = archiveFile.get().asFile
-        def tmpDir = new File(temporaryDir, "repack")
+        def tmpDir = new File(temporaryDir, 'repack')
 
-        // Extract the fat jar
         tmpDir.deleteDir()
         tmpDir.mkdirs()
         ant.unzip(src: jarFile, dest: tmpDir)
 
-        // Strip module-info.class from each embedded LWJGL jar
-        def jarjarDir = new File(tmpDir, "META-INF/jarjar")
+        def jarjarDir = new File(tmpDir, 'META-INF/jarjar')
         if (jarjarDir.exists()) {
             jarjarDir.listFiles().findAll { it.name.endsWith('.jar') && it.name.startsWith('lwjgl-') }.each { embeddedJar ->
                 def stripped = new File(temporaryDir, "stripped-${embeddedJar.name}")
@@ -225,25 +267,23 @@ tasks.named('jar') {
                 stripped.renameTo(embeddedJar)
             }
 
-            // Fix metadata.json because NeoForge JarJar generates duplicate identifiers for natives
-            def metadataFile = new File(jarjarDir, "metadata.json")
-            if (metadataFile.exists()) {
-                def slurper = new groovy.json.JsonSlurper()
-                def metadata = slurper.parseText(metadataFile.text)
-                metadata.jars.each { jarEntry ->
-                    // Give every platform's natives a distinct identifier (e.g. lwjgl-vma-natives-linux),
-                    // otherwise JarJar collapses them by shared identifier and only one platform survives.
-                    def m = (jarEntry.path =~ /-(natives-[a-z0-9-]+)\.jar$/)
-                    if (m) {
-                        jarEntry.identifier.artifact += "-" + m[0][1]
-                    }
-                }
-                metadataFile.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(metadata))
-            }
         }
 
-        // Repack
         jarFile.delete()
         ant.zip(destfile: jarFile, basedir: tmpDir)
+    }
+}
+
+tasks.named('build').configure {
+    dependsOn tasks.named('jarJar')
+}
+
+publishing {
+    publications {
+        create('mavenJava', MavenPublication) {
+            artifactId = project.archives_base_name
+            from components.java
+            jarJar.component(it)
+        }
     }
 }

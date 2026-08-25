@@ -29,6 +29,10 @@ import org.joml.Vector3f;
 
 public class LiquidRenderer {
     private static final float MAX_FLUID_HEIGHT = 0.8888889F;
+    // TextureAtlasSprite coordinates are measured in the sprite's 16x16
+    // logical coordinate space, rather than normalized 0..1 coordinates.
+    private static final float SPRITE_SIZE = 16.0F;
+    private static final float HALF_SPRITE_SIZE = SPRITE_SIZE * 0.5F;
 
     private final BlockPos.MutableBlockPos mBlockPos = new BlockPos.MutableBlockPos();
     private final BlockPos.MutableBlockPos upperBlockPos = new BlockPos.MutableBlockPos();
@@ -172,8 +176,8 @@ public class LiquidRenderer {
                 u0 = sprite.getU(0.0F);
                 v0 = sprite.getV(0.0F);
                 u1 = u0;
-                v1 = sprite.getV(1.0F);
-                u2 = sprite.getU(1.0F);
+                v1 = sprite.getV(SPRITE_SIZE);
+                u2 = sprite.getU(SPRITE_SIZE);
                 v2 = v1;
                 u3 = u2;
                 v3 = v0;
@@ -183,14 +187,14 @@ public class LiquidRenderer {
                 float ai = Mth.sin(ah) * 0.25F;
                 float aj = Mth.cos(ah) * 0.25F;
 
-                u0 = sprite.getU(0.5F + (-aj - ai));
-                v0 = sprite.getV(0.5F - aj + ai);
-                u1 = sprite.getU(0.5F - aj + ai);
-                v1 = sprite.getV(0.5F + aj + ai);
-                u2 = sprite.getU(0.5F + aj + ai);
-                v2 = sprite.getV(0.5F + (aj - ai));
-                u3 = sprite.getU(0.5F + (aj - ai));
-                v3 = sprite.getV(0.5F + (-aj - ai));
+                u0 = sprite.getU((0.5F + (-aj - ai)) * SPRITE_SIZE);
+                v0 = sprite.getV((0.5F - aj + ai) * SPRITE_SIZE);
+                u1 = sprite.getU((0.5F - aj + ai) * SPRITE_SIZE);
+                v1 = sprite.getV((0.5F + aj + ai) * SPRITE_SIZE);
+                u2 = sprite.getU((0.5F + aj + ai) * SPRITE_SIZE);
+                v2 = sprite.getV((0.5F + (aj - ai)) * SPRITE_SIZE);
+                u3 = sprite.getU((0.5F + (aj - ai)) * SPRITE_SIZE);
+                v3 = sprite.getV((0.5F + (-aj - ai)) * SPRITE_SIZE);
             }
 
             float uA = (u0 + u1 + u2 + u3) / 4.0F;
@@ -333,10 +337,10 @@ public class LiquidRenderer {
             }
 
             float u0 = sprite.getU(0.0F);
-            float u1 = sprite.getU(0.5F);
-            float v0 = sprite.getV((1.0F - h1) * 0.5F);
-            float v1 = sprite.getV((1.0F - h2) * 0.5F);
-            float v2 = sprite.getV(0.5F);
+            float u1 = sprite.getU(HALF_SPRITE_SIZE);
+            float v0 = sprite.getV((1.0F - h1) * HALF_SPRITE_SIZE);
+            float v1 = sprite.getV((1.0F - h2) * HALF_SPRITE_SIZE);
+            float v2 = sprite.getV(HALF_SPRITE_SIZE);
 
             float brightness = region.getShade(direction, true);
 
@@ -481,4 +485,3 @@ public class LiquidRenderer {
         }
     }
 }
-

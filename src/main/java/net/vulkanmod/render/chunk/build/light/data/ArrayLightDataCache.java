@@ -3,6 +3,7 @@ package net.vulkanmod.render.chunk.build.light.data;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.world.level.BlockAndTintGetter;
+import net.vulkanmod.compat.dynamiclights.DynamicLightsBridge;
 
 import java.util.Arrays;
 
@@ -60,6 +61,8 @@ public class ArrayLightDataCache extends LightDataAccess {
 
     @Override
     public int get(int x, int y, int z) {
+        DynamicLightsBridge.recordPos(x, y, z);
+
         int l = this.index(x, y, z);
 
         int word = this.light[l];

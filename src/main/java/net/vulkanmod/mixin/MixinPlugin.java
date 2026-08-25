@@ -24,6 +24,9 @@ public class MixinPlugin implements IMixinConfigPlugin {
     private static final String FLYWHEEL_MIXIN_PACKAGE = "net.vulkanmod.mixin.compatibility.flywheel.";
     private static final String FLYWHEEL_BACKEND_MANAGER_MIXIN = FLYWHEEL_MIXIN_PACKAGE + "FlywheelBackendManagerMixin";
     private static final String FLYWHEEL_BACKEND_MANAGER = "dev.engine_room.flywheel.impl.BackendManagerImpl";
+    private static final String BOBBY_MIXIN_PACKAGE = "net.vulkanmod.mixin.compatibility.bobby.";
+    private static final String BOBBY_FAKE_CHUNK_MANAGER_MIXIN = BOBBY_MIXIN_PACKAGE + "FakeChunkManagerM";
+    private static final String BOBBY_FAKE_CHUNK_MANAGER = "de.johni0702.minecraft.bobby.FakeChunkManager";
 
     @Override
     public void onLoad(String mixinPackage) {
@@ -63,6 +66,11 @@ public class MixinPlugin implements IMixinConfigPlugin {
                     && FLYWHEEL_BACKEND_MANAGER.equals(targetClassName);
         }
 
+        if (mixinClassName.startsWith(BOBBY_MIXIN_PACKAGE)) {
+            return BOBBY_FAKE_CHUNK_MANAGER_MIXIN.equals(mixinClassName)
+                    && BOBBY_FAKE_CHUNK_MANAGER.equals(targetClassName);
+        }
+
         if (mixinClassName.startsWith("net.vulkanmod.mixin.profiling.")) {
             return RuntimeOptions.profilingMixinsEnabled();
         }
@@ -93,7 +101,7 @@ public class MixinPlugin implements IMixinConfigPlugin {
         // WitherStormRenderBuffererM is registered statically in vulkanmod.mixins.json and gated by
         // shouldApplyMixin (the same pattern as the create/tensura compat mixins). Registering it here
         // as well would double-register it; and the getResource() probe used previously is unreliable on
-        // NeoForge 1.20.1, where other mods' classes are not yet queryable at mixin-config-load time.
+        // Forge 1.20.1, where other mods' classes are not yet queryable at mixin-config-load time.
         return new ArrayList<>();
     }
 
@@ -106,4 +114,3 @@ public class MixinPlugin implements IMixinConfigPlugin {
 
     }
 }
-

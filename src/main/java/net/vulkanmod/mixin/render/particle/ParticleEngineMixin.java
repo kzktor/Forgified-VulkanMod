@@ -21,7 +21,7 @@ import java.util.Queue;
 public class ParticleEngineMixin {
 
     // SRG name + remap=false: the Mixin AP doesn't emit a refmap entry for this generic-typed @Shadow on
-    // NeoForge 1.20.1 (runs SRG), so the Mojang name "particles" isn't located at runtime. f_107289_ = particles.
+    // Forge 1.20.1 runs SRG, so the Mojang name "particles" isn't located at runtime. f_107289_ = particles.
     @Shadow(remap = false) @Final private Map<ParticleRenderType, Queue<Particle>> f_107289_;
 
     @Inject(method = "add", at = @At("HEAD"), cancellable = true)
@@ -106,4 +106,3 @@ public class ParticleEngineMixin {
         return false;
     }
 }
-

@@ -35,59 +35,9 @@ public class ModelPartM {
     // compile
     @Inject(method = "m_104290_", at = @At("HEAD"), cancellable = true, remap = false)
     private void compile(PoseStack.Pose pose, VertexConsumer vertexConsumer, int light, int overlay, float r, float g, float b, float a, CallbackInfo ci) {
-        if (GuiEntityRenderState.isGuiEntityPreview(light)) {
-            GuiEntityRenderState.prepareDeferredDraw();
-            return; // vanilla compile draws the GUI preview through the deferred state
-        }
-
-        Matrix4f matrix4f = pose.pose();
-        Matrix3f matrix3f = pose.normal();
-
-        ExtendedVertexBuilder vertexBuilder = ExtendedVertexBuilder.of(vertexConsumer);
-
-        if (vertexBuilder != null && vertexBuilder.canUseFastVertex()) {
-            int packedColor = ColorUtil.RGBA.pack(r, g, b, a);
-
-            for (ModelPart.Cube cube : this.f_104212_) {
-                CubeModel cubeModel = ((ModelPartCubeMixed) (Object) cube).getCubeModel();
-
-                ModelPart.Polygon[] polygons = cubeModel.getPolygons();
-
-                cubeModel.transformVertices(matrix4f);
-
-                for (ModelPart.Polygon polygon : polygons) {
-                    matrix3f.transform(this.vulkanMod$normal.set(polygon.normal));
-                    this.vulkanMod$normal.normalize();
-
-                    int packedNormal = VertexUtil.packNormal(vulkanMod$normal.x(), vulkanMod$normal.y(), vulkanMod$normal.z());
-
-                    for (ModelPart.Vertex vertex : polygon.vertices) {
-                        Vector3f pos = vertex.pos;
-                        vertexBuilder.vertex(pos.x(), pos.y(), pos.z(), packedColor, vertex.u, vertex.v, overlay, light, packedNormal);
-                    }
-                }
-            }
-        } else {
-            for (ModelPart.Cube cube : this.f_104212_) {
-                CubeModel cubeModel = ((ModelPartCubeMixed) (Object) cube).getCubeModel();
-
-                ModelPart.Polygon[] polygons = cubeModel.getPolygons();
-
-                cubeModel.transformVertices(matrix4f);
-
-                for (ModelPart.Polygon polygon : polygons) {
-                    matrix3f.transform(this.vulkanMod$normal.set(polygon.normal));
-                    this.vulkanMod$normal.normalize();
-
-                    for (ModelPart.Vertex vertex : polygon.vertices) {
-                        Vector3f pos = vertex.pos;
-                        vertexConsumer.vertex(pos.x(), pos.y(), pos.z(), r, g, b, a, vertex.u, vertex.v, overlay, light,
-                                vulkanMod$normal.x(), vulkanMod$normal.y(), vulkanMod$normal.z());
-                    }
-                }
-            }
-        }
-
-        ci.cancel();
+        // Keep vanilla ModelPart compilation on Forge 1.20.1. The fast CubeModel path
+        // changes the vertex ordering and transform lifetime used by block-entity models;
+        // that produces solid-color beds/chests and visible head jitter. BufferBuilder's
+        // native vertex path is handled by the Vulkan vertex upload mixin below.
     }
 }

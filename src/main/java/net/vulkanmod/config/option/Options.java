@@ -10,6 +10,7 @@ import net.vulkanmod.config.PerformancePreset;
 import net.vulkanmod.config.PerformancePresetApplier;
 import net.vulkanmod.config.RenderScale;
 import net.vulkanmod.config.gui.OptionBlock;
+import net.vulkanmod.compat.bobby.BobbyBridge;
 
 import net.vulkanmod.config.video.VideoModeManager;
 import net.vulkanmod.config.video.VideoModeSet;
@@ -23,6 +24,8 @@ import java.util.List;
 import java.util.stream.IntStream;
 
 public abstract class Options {
+    private static final int VANILLA_MAX_RENDER_DISTANCE = 32;
+
     public static boolean fullscreenDirty = false;
     static Config config = Initializer.CONFIG;
     static Minecraft minecraft = Minecraft.getInstance();
@@ -31,6 +34,15 @@ public abstract class Options {
 
     private static void markPerformancePresetCustom() {
         config.performancePreset = PerformancePreset.CUSTOM.id;
+    }
+
+    /**
+     * Upper bound of the render-distance slider. Bobby serves chunks beyond the server's view distance
+     * from its own cache, so when it is installed the slider follows its configured maximum instead of
+     * vanilla's 32.
+     */
+    private static int maxRenderDistance() {
+        return Math.max(VANILLA_MAX_RENDER_DISTANCE, BobbyBridge.getMaxRenderDistance());
     }
 
     public static List<OptionPage> getOptionPages() {
@@ -191,7 +203,7 @@ public abstract class Options {
         return new OptionBlock[]{
                 new OptionBlock("", new Option<?>[]{
                         new RangeOption(Component.translatable("options.renderDistance"),
-                                2, 32, 1,
+                                2, maxRenderDistance(), 1,
                                 (value) -> {
                                     markPerformancePresetCustom();
                                     minecraftOptions.renderDistance().set(value);
