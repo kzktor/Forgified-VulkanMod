@@ -1,4 +1,4 @@
-# Forgified VulkanMod - VulkanMod Forge Unofficial Fork | VulkanMod Forge 非官方分支
+# Forgified VulkanMod - VulkanMod Forge Unofficial Fork (VulkanMod Forge 非官方分支)
 
 This repository is an unofficial modified fork.
 本仓库是非官方修改分支。
@@ -11,17 +11,13 @@ Prominent modification notice: this fork was ported to Forge 1.20.1 on 2026-08-2
 
 ## Attribution 署名
 
-Original project: [xCollateral/VulkanMod](https://github.com/xCollateral/VulkanMod)
-原始项目： [xCollateral/VulkanMod](https://github.com/xCollateral/VulkanMod)
+Original project (原始项目): [xCollateral/VulkanMod](https://github.com/xCollateral/VulkanMod)
 
-Original authors and contributors: xCollateral and VulkanMod contributors.
-原作者及贡献者：xCollateral 以及 VulkanMod 贡献者。
+Original authors and contributors | 原作者及贡献者: xCollateral and VulkanMod contributors (xCollateral 以及 VulkanMod 贡献者).
 
-VulkanMod Reforged maintainer: Rindw.
-VulkanMod Reforged 维护者: Rindw。
+VulkanMod Reforged maintainer (VulkanMod Reforged 维护者): Rindw.
 
-Fork maintainer:kzktor
-分支维护者：kzktor
+Fork maintainer (分支维护者):kzktor
 
 ## Support 支持
 

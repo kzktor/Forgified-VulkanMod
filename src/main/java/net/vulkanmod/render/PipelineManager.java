@@ -38,7 +38,7 @@ public abstract class PipelineManager {
     }
 
     private static void createBasicPipelines() {
-        terrainShaderEarlyZ = createPipeline("terrain","terrain", "terrain_z", TERRAIN_VERTEX_FORMAT);
+        terrainShaderEarlyZ = createPipeline("terrain", "terrain", "terrain_Z", TERRAIN_VERTEX_FORMAT);
         terrainShader = createPipeline("terrain", "terrain", "terrain", TERRAIN_VERTEX_FORMAT);
         fastBlitPipeline = createPipeline("blit", "blit", "blit", CustomVertexFormat.NONE);
         renderScaleBlitPipeline = createPipeline("render_scale_blit", "render_scale_blit", "render_scale_blit", CustomVertexFormat.NONE);
@@ -94,4 +94,3 @@ public abstract class PipelineManager {
         }
     }
 }
-

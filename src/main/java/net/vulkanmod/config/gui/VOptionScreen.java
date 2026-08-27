@@ -116,8 +116,7 @@ public class VOptionScreen extends Screen {
     private VTextInputWidget createSearchField() {
         int rightMargin = 10;
         int padding = 10;
-        int kofiWidth = Minecraft.getInstance().font.width(Component.translatable("vulkanmod.options.buttons.kofi")) + padding;
-        int topBarRight = this.width - kofiWidth - rightMargin;
+        int topBarRight = this.width - rightMargin;
 
         if (UpdateChecker.isUpdateAvailable()) {
             int updateWidth = minecraft.font.width(Component.translatable("vulkanmod.options.buttons.update_available")) + padding;
@@ -287,21 +286,12 @@ public class VOptionScreen extends Screen {
         this.undoButton = new VButtonWidget(x0, y0, buttonWidth, VGuiConstants.WIDGET_HEIGHT,
                 Component.translatable("vulkanmod.options.buttons.undo"), button -> undo());
 
-        int kofiWidth = Minecraft.getInstance().font.width(Component.translatable("vulkanmod.options.buttons.kofi")) + padding;
-
-        int kofiX = this.width - kofiWidth - rightMargin;
-        VButtonWidget supportButton = new VButtonWidget(kofiX, 4, kofiWidth, VGuiConstants.WIDGET_HEIGHT,
-                Component.translatable("vulkanmod.options.buttons.kofi"),
-                button -> Util.getPlatform().openUri("https://ko-fi.com/rindw"));
-
         this.buttons.add(this.applyButton);
         this.buttons.add(doneButton);
-        this.buttons.add(supportButton);
         this.buttons.add(this.undoButton);
 
         this.addWidget(this.applyButton);
         this.addWidget(doneButton);
-        this.addWidget(supportButton);
         this.addWidget(this.undoButton);
         this.addWidget(this.searchField);
 
@@ -309,7 +299,7 @@ public class VOptionScreen extends Screen {
             assert minecraft != null;
             int updateWidth = minecraft.font.width(Component.translatable("vulkanmod.options.buttons.update_available")) + padding;
             var updateButton = new VButtonWidget(
-                    kofiX - updateWidth - VGuiConstants.WIDGET_MARGIN, 4,
+                    this.width - updateWidth - rightMargin, 4,
                     updateWidth, VGuiConstants.WIDGET_HEIGHT,
                     Component.translatable("vulkanmod.options.buttons.update_available").withStyle(ChatFormatting.UNDERLINE),
                     button -> Util.getPlatform().openUri(UpdateChecker.RELEASES_URL)
