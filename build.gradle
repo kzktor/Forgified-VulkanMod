@@ -18,6 +18,16 @@ java.toolchain.languageVersion = JavaLanguageVersion.of(17)
 
 jarJar.enable()
 
+// Build variant for Android (FCL / PojavLauncher). The launcher already ships the full
+// LWJGL stack on the classpath (lwjgl-vulkan/shaderc/vma + arm64 natives), so embedding
+// the bindings again via Jar-in-Jar collides with the launcher's modules (split package).
+// Build the Android jar with: ./gradlew build -Pvulkanmod_android=true
+def androidBuild = project.findProperty('vulkanmod_android')?.toString() == 'true'
+
+if (androidBuild) {
+    version = project.mod_version + '-android'
+}
+
 minecraft {
     mappings channel: 'official', version: project.minecraft_version
     accessTransformer = file('src/main/resources/META-INF/accesstransformer.cfg')
@@ -81,6 +91,11 @@ configurations {
         canBeConsumed = false
         transitive = false
     }
+    nativesLinuxArm64 {
+        canBeResolved = true
+        canBeConsumed = false
+        transitive = false
+    }
     nativesMacos {
         canBeResolved = true
         canBeConsumed = false
@@ -125,21 +140,36 @@ dependencies {
     compileOnly fg.deobf("dev.su5ed.sinytra.fabric-api:fabric-renderer-api-v1:${ffapi_renderer_api_version}")
     compileOnly fg.deobf("dev.su5ed.sinytra.fabric-api:fabric-api-base:${ffapi_api_base_version}")
 
-    implementation "org.lwjgl:lwjgl-vulkan:$lwjglVersion"
-    implementation "org.lwjgl:lwjgl-shaderc:$lwjglVersion"
-    implementation "org.lwjgl:lwjgl-vma:$lwjglVersion"
+    // JNA is used on Android to release FCL's ANativeWindow from its EGL surface before the Vulkan
+    // handoff (EglSurfaceReleaser). It is already on the launcher's classpath (jna-5.13.0.jar), so
+    // it is compileOnly: never embedded, only needed at build time to resolve the binding signatures.
+    compileOnly "net.java.dev.jna:jna:5.13.0"
 
-    runtimeOnly "org.lwjgl:lwjgl-shaderc:$lwjglVersion:$devNatives"
-    runtimeOnly "org.lwjgl:lwjgl-vma:$lwjglVersion:$devNatives"
+    if (androidBuild) {
+        // Android launchers already provide the LWJGL Vulkan/Shaderc/VMA bindings and
+        // natives on the classpath, so compile against them without embedding them.
+        compileOnly "org.lwjgl:lwjgl-vulkan:$lwjglVersion"
+        compileOnly "org.lwjgl:lwjgl-shaderc:$lwjglVersion"
+        compileOnly "org.lwjgl:lwjgl-vma:$lwjglVersion"
+    } else {
+        implementation "org.lwjgl:lwjgl-vulkan:$lwjglVersion"
+        implementation "org.lwjgl:lwjgl-shaderc:$lwjglVersion"
+        implementation "org.lwjgl:lwjgl-vma:$lwjglVersion"
 
-    // ForgeGradle's Jar-in-Jar metadata requires Maven version ranges.
-    jarJar "org.lwjgl:lwjgl-vulkan:$lwjglJarJarVersion"
-    jarJar "org.lwjgl:lwjgl-shaderc:$lwjglJarJarVersion"
-    jarJar "org.lwjgl:lwjgl-vma:$lwjglJarJarVersion"
+        runtimeOnly "org.lwjgl:lwjgl-shaderc:$lwjglVersion:$devNatives"
+        runtimeOnly "org.lwjgl:lwjgl-vma:$lwjglVersion:$devNatives"
+
+        // ForgeGradle's Jar-in-Jar metadata requires Maven version ranges.
+        jarJar "org.lwjgl:lwjgl-vulkan:$lwjglJarJarVersion"
+        jarJar "org.lwjgl:lwjgl-shaderc:$lwjglJarJarVersion"
+        jarJar "org.lwjgl:lwjgl-vma:$lwjglJarJarVersion"
+    }
     nativesWindows "org.lwjgl:lwjgl-shaderc:$lwjglVersion:natives-windows"
     nativesWindows "org.lwjgl:lwjgl-vma:$lwjglVersion:natives-windows"
     nativesLinux "org.lwjgl:lwjgl-shaderc:$lwjglVersion:natives-linux"
     nativesLinux "org.lwjgl:lwjgl-vma:$lwjglVersion:natives-linux"
+    nativesLinuxArm64 "org.lwjgl:lwjgl-shaderc:$lwjglVersion:natives-linux-arm64"
+    nativesLinuxArm64 "org.lwjgl:lwjgl-vma:$lwjglVersion:natives-linux-arm64"
     nativesMacos "org.lwjgl:lwjgl-shaderc:$lwjglVersion:natives-macos"
     nativesMacos "org.lwjgl:lwjgl-vma:$lwjglVersion:natives-macos"
     nativesMacos "org.lwjgl:lwjgl-vulkan:$lwjglVersion:natives-macos"
@@ -189,17 +219,25 @@ tasks.named('jar', Jar).configure {
 
     // Native JARs are unpacked into the mod JAR. Forge's Jar-in-Jar locator only accepts
     // loadable Java dependencies and rejects classifier-only native archives as mod files.
-    into('assets/vulkanmod/natives/windows/x64') {
-        from { project.configurations.nativesWindows.collect { zipTree(it) } }
-    }
-    into('assets/vulkanmod/natives/linux/x64') {
-        from { project.configurations.nativesLinux.collect { zipTree(it) } }
-    }
-    into('assets/vulkanmod/natives/macos/x64') {
-        from { project.configurations.nativesMacos.collect { zipTree(it) } }
-    }
-    into('assets/vulkanmod/natives/macos/arm64') {
-        from { project.configurations.nativesMacosArm64.collect { zipTree(it) } }
+    // Android bundles no natives at all: FCL/PojavLauncher ships the LWJGL 3.3.3 arm64
+    // natives on the classpath, so embedding them again only bloats the jar (and any
+    // transfer-size boundary risk) for no benefit.
+    if (!androidBuild) {
+        into('assets/vulkanmod/natives/windows/x64') {
+            from { project.configurations.nativesWindows.collect { zipTree(it) } }
+        }
+        into('assets/vulkanmod/natives/linux/x64') {
+            from { project.configurations.nativesLinux.collect { zipTree(it) } }
+        }
+        into('assets/vulkanmod/natives/linux/arm64') {
+            from { project.configurations.nativesLinuxArm64.collect { zipTree(it) } }
+        }
+        into('assets/vulkanmod/natives/macos/x64') {
+            from { project.configurations.nativesMacos.collect { zipTree(it) } }
+        }
+        into('assets/vulkanmod/natives/macos/arm64') {
+            from { project.configurations.nativesMacosArm64.collect { zipTree(it) } }
+        }
     }
 
     manifest {
@@ -230,17 +268,22 @@ tasks.named('jarJar').configure {
     exclude 'META-INF/*.DSA'
     exclude 'META-INF/*.RSA'
 
-    into('assets/vulkanmod/natives/windows/x64') {
-        from { project.configurations.nativesWindows.collect { zipTree(it) } }
-    }
-    into('assets/vulkanmod/natives/linux/x64') {
-        from { project.configurations.nativesLinux.collect { zipTree(it) } }
-    }
-    into('assets/vulkanmod/natives/macos/x64') {
-        from { project.configurations.nativesMacos.collect { zipTree(it) } }
-    }
-    into('assets/vulkanmod/natives/macos/arm64') {
-        from { project.configurations.nativesMacosArm64.collect { zipTree(it) } }
+    if (!androidBuild) {
+        into('assets/vulkanmod/natives/windows/x64') {
+            from { project.configurations.nativesWindows.collect { zipTree(it) } }
+        }
+        into('assets/vulkanmod/natives/linux/x64') {
+            from { project.configurations.nativesLinux.collect { zipTree(it) } }
+        }
+        into('assets/vulkanmod/natives/linux/arm64') {
+            from { project.configurations.nativesLinuxArm64.collect { zipTree(it) } }
+        }
+        into('assets/vulkanmod/natives/macos/x64') {
+            from { project.configurations.nativesMacos.collect { zipTree(it) } }
+        }
+        into('assets/vulkanmod/natives/macos/arm64') {
+            from { project.configurations.nativesMacosArm64.collect { zipTree(it) } }
+        }
     }
 
     finalizedBy tasks.named('reobfJarJar')

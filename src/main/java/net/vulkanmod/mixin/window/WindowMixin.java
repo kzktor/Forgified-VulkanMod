@@ -9,6 +9,7 @@ import net.vulkanmod.config.video.VideoModeManager;
 import net.vulkanmod.config.option.Options;
 import net.vulkanmod.config.video.VideoModeSet;
 import net.vulkanmod.compat.EarlyWindowCompat;
+import net.vulkanmod.compat.EglSurfaceReleaser;
 import net.vulkanmod.vulkan.Renderer;
 import net.vulkanmod.vulkan.VRenderSystem;
 import net.vulkanmod.vulkan.Vulkan;
@@ -85,11 +86,28 @@ public abstract class WindowMixin {
     private long redirectSetupMinecraftWindow(java.util.function.IntSupplier width, java.util.function.IntSupplier height, java.util.function.Supplier title, java.util.function.LongSupplier monitor) {
         long handle = net.minecraftforge.fml.loading.ImmediateWindowHandler.setupMinecraftWindow(width, height, (java.util.function.Supplier<String>) title, monitor);
 
-        if (GLFW.glfwGetWindowAttrib(handle, GLFW_CLIENT_API) != GLFW_NO_API) {
+        // FCL/PojavLauncher's GLFW returns GLFW_NO_API from glfwGetWindowAttrib(GLFW_CLIENT_API)
+        // regardless of how the window was actually created, so on Android the attribute check is
+        // unreliable. We must always recreate the window with GLFW_CLIENT_API=GLFW_NO_API there:
+        // that makes pojavSetWindowHint select RENDERER_VULKAN and pojavCreateContext return the raw
+        // ANativeWindow, which vkCreateAndroidSurfaceKHR (and FCL's own glfwCreateWindowSurface)
+        // pass straight through as the window handle.
+        boolean needsVulkanWindow = Platform.isAndroid()
+                || GLFW.glfwGetWindowAttrib(handle, GLFW_CLIENT_API) != GLFW_NO_API;
+
+        if (needsVulkanWindow) {
             net.vulkanmod.Initializer.LOGGER.info("VulkanMod: Intercepted OpenGL early window. Performing Vulkan handoff...");
 
             EarlyWindowCompat.setHandoffComplete(true);
             EarlyWindowCompat.disableFmlEarlyWindowProvider();
+
+            if (Platform.isAndroid()) {
+                // FCL's glfwDestroyWindow is a no-op on the shared ANativeWindow and
+                // glfwMakeContextCurrent(0) only detaches without destroying the EGL surface, so
+                // release the window from its EGL surface first. Otherwise vkCreateAndroidSurfaceKHR
+                // fails with VK_ERROR_NATIVE_WINDOW_IN_USE_KHR (-1000000001).
+                EglSurfaceReleaser.releaseWindowFromEgl(handle);
+            }
 
             GLFW.glfwMakeContextCurrent(0L);
             GLFW.glfwDestroyWindow(handle);

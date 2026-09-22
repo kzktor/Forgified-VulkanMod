@@ -1,6 +1,7 @@
 package net.vulkanmod.vulkan;
 
 import net.vulkanmod.Initializer;
+import net.vulkanmod.config.Platform;
 import net.vulkanmod.vulkan.device.Device;
 import net.vulkanmod.vulkan.device.DeviceManager;
 import net.vulkanmod.vulkan.framebuffer.SwapChain;
@@ -373,15 +374,38 @@ public class Vulkan {
     private static void createSurface(long handle) {
         window = handle;
 
-        try (MemoryStack stack = stackPush()) {
+        if (Platform.isAndroid()) {
+            // On FCL / PojavLauncher the GLFW window handle is in fact the ANativeWindow pointer:
+            // glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API) -> pojavSetWindowHint selects the Vulkan
+            // renderer, and glfwCreateWindow -> pojavCreateContext returns pojav_environ->pojavWindow.
+            // FCL's GLFW does not implement glfwCreateWindowSurface, so create the surface directly.
+            try (MemoryStack stack = stackPush()) {
 
-            LongBuffer pSurface = stack.longs(VK_NULL_HANDLE);
+                net.vulkanmod.Initializer.LOGGER.info("VulkanMod: vkCreateAndroidSurfaceKHR window=0x{}",
+                        Long.toHexString(window));
 
-            checkResult(org.lwjgl.glfw.GLFWVulkan.nglfwCreateWindowSurface(
-                    instance.address(), window, 0L, org.lwjgl.system.MemoryUtil.memAddress(pSurface)),
-                    "Failed to create window surface");
+                VkAndroidSurfaceCreateInfoKHR createInfo = VkAndroidSurfaceCreateInfoKHR.calloc(stack);
+                createInfo.sType(KHRAndroidSurface.VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR);
+                createInfo.window(window);
 
-            surface = pSurface.get(0);
+                LongBuffer pSurface = stack.longs(VK_NULL_HANDLE);
+
+                checkResult(KHRAndroidSurface.vkCreateAndroidSurfaceKHR(instance, createInfo, null, pSurface),
+                        "Failed to create Android window surface");
+
+                surface = pSurface.get(0);
+            }
+        } else {
+            try (MemoryStack stack = stackPush()) {
+
+                LongBuffer pSurface = stack.longs(VK_NULL_HANDLE);
+
+                checkResult(org.lwjgl.glfw.GLFWVulkan.nglfwCreateWindowSurface(
+                        instance.address(), window, 0L, org.lwjgl.system.MemoryUtil.memAddress(pSurface)),
+                        "Failed to create window surface");
+
+                surface = pSurface.get(0);
+            }
         }
     }
 
@@ -480,6 +504,27 @@ public class Vulkan {
     }
 
     private static PointerBuffer getRequiredInstanceExtensions(MemoryStack stack) {
+
+        if (Platform.isAndroid()) {
+            // FCL / PojavLauncher's GLFW has no working Vulkan surface bridge, so the instance
+            // extensions for an Android surface must be requested directly: VK_KHR_surface plus
+            // VK_KHR_android_surface (which vkCreateAndroidSurfaceKHR depends on).
+            PointerBuffer extensions = stack.mallocPointer(2
+                    + (ENABLE_VALIDATION_LAYERS ? 1 : 0)
+                    + (portabilityEnumeration ? 1 : 0));
+
+            extensions.put(stack.UTF8(KHRSurface.VK_KHR_SURFACE_EXTENSION_NAME));
+            extensions.put(stack.UTF8(KHRAndroidSurface.VK_KHR_ANDROID_SURFACE_EXTENSION_NAME));
+
+            if (ENABLE_VALIDATION_LAYERS) {
+                extensions.put(stack.UTF8(VK_EXT_DEBUG_UTILS_EXTENSION_NAME));
+            }
+            if (portabilityEnumeration) {
+                extensions.put(stack.UTF8(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME));
+            }
+
+            return extensions.rewind();
+        }
 
         PointerBuffer glfwExtensions = glfwGetRequiredInstanceExtensions();
 

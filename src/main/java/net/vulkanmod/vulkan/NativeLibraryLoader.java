@@ -1,6 +1,7 @@
 package net.vulkanmod.vulkan;
 
 import net.vulkanmod.Initializer;
+import net.vulkanmod.config.Platform;
 import org.lwjgl.system.Configuration;
 
 import java.io.IOException;
@@ -18,6 +19,16 @@ public final class NativeLibraryLoader {
 
     public static synchronized void ensureLoaded() {
         if (loaded) {
+            return;
+        }
+
+        if (Platform.isAndroid()) {
+            // FCL/PojavLauncher already ships the LWJGL 3.3.3 arm64 natives on the
+            // classpath (org.lwjgl.librarypath / java.library.path), so there is nothing
+            // to extract. Keeping the bundled natives out of the jar also keeps it well
+            // under any 4 MiB transfer-size boundary that could truncate the archive.
+            loaded = true;
+            Initializer.LOGGER.info("VulkanMod: using launcher-provided LWJGL natives on Android");
             return;
         }
 

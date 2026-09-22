@@ -29,16 +29,23 @@ jobs:
         with:
           java-version: '17'
           distribution: microsoft
-      - name: make gradle wrapper executable
-        run: chmod +x ./gradlew
-      - name: build
-        run: ./gradlew build
-      - name: capture build artifacts
+      - name: make scripts executable
+        run: chmod +x ./gradlew ./buildAll.sh
+      - name: build (desktop + Android/FCL)
+        run: ./buildAll.sh
+      - name: capture desktop jar
         uses: actions/upload-artifact@v4
         with:
-          name: VulkanMod-Forge-1.20.1
+          name: VulkanMod-desktop-1.20.1
           path: |
             build/libs/VulkanMod_1.20.1-*.jar
+            !build/libs/*-android*.jar
             !build/libs/*-slim.jar
             !build/libs/*-sources.jar
+          if-no-files-found: error
+      - name: capture Android/FCL jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: VulkanMod-android-1.20.1
+          path: build/libs/VulkanMod_1.20.1-*-android.jar
           if-no-files-found: error
