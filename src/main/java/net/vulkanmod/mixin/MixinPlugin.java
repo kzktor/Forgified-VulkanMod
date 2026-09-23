@@ -27,6 +27,9 @@ public class MixinPlugin implements IMixinConfigPlugin {
     private static final String BOBBY_MIXIN_PACKAGE = "net.vulkanmod.mixin.compatibility.bobby.";
     private static final String BOBBY_FAKE_CHUNK_MANAGER_MIXIN = BOBBY_MIXIN_PACKAGE + "FakeChunkManagerM";
     private static final String BOBBY_FAKE_CHUNK_MANAGER = "de.johni0702.minecraft.bobby.FakeChunkManager";
+    private static final String VOXELMAP_MIXIN_PACKAGE = "net.vulkanmod.mixin.compatibility.voxelmap.";
+    private static final String VOXELMAP_OPENGL_UTILS_MIXIN = VOXELMAP_MIXIN_PACKAGE + "OpenGLUtilsMixin";
+    private static final String VOXELMAP_OPENGL_UTILS = "com.mamiyaotaru.voxelmap.util.OpenGL$Utils";
 
     @Override
     public void onLoad(String mixinPackage) {
@@ -69,6 +72,11 @@ public class MixinPlugin implements IMixinConfigPlugin {
         if (mixinClassName.startsWith(BOBBY_MIXIN_PACKAGE)) {
             return BOBBY_FAKE_CHUNK_MANAGER_MIXIN.equals(mixinClassName)
                     && BOBBY_FAKE_CHUNK_MANAGER.equals(targetClassName);
+        }
+
+        if (mixinClassName.startsWith(VOXELMAP_MIXIN_PACKAGE)) {
+            return VOXELMAP_OPENGL_UTILS_MIXIN.equals(mixinClassName)
+                    && VOXELMAP_OPENGL_UTILS.equals(targetClassName);
         }
 
         if (mixinClassName.startsWith("net.vulkanmod.mixin.profiling.")) {

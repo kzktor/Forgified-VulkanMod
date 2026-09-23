@@ -24,6 +24,7 @@
     "compatibility.witherstorm.WitherStormRenderBuffererM",
     "compatibility.flywheel.FlywheelBackendManagerMixin",
     "compatibility.bobby.FakeChunkManagerM",
+    "compatibility.voxelmap.OpenGLUtilsMixin",
     "compatibility.gl.GL11FacadeM",
     "compatibility.gl.GL11M",
     "compatibility.gl.GL12M",
